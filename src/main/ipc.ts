@@ -1,0 +1,74 @@
+import { ipcMain } from 'electron'
+import type { Fr24Bounds, Fr24NavAction, SessionPatch } from '@shared/ipc'
+import { IpcChannels } from '@shared/ipc'
+import type { Fr24Controller } from './fr24'
+import { getSessionState, patchSessionState } from './session'
+
+// Main-side IPC registration for Phase 1: the FR24 view channels plus the
+// minimal session get/patch. Hand-rolled against the shared contract — one
+// registration point so the wiring is auditable in a single file.
+
+const NAV_ACTIONS: readonly Fr24NavAction[] = ['back', 'forward', 'reload', 'home']
+
+/** Narrow an untrusted renderer payload to Fr24Bounds (all four integer-ish). */
+function isBounds(value: unknown): value is Fr24Bounds {
+  if (typeof value !== 'object' || value === null) return false
+  const b = value as Record<string, unknown>
+  return (
+    typeof b.x === 'number' &&
+    typeof b.y === 'number' &&
+    typeof b.width === 'number' &&
+    typeof b.height === 'number'
+  )
+}
+
+/**
+ * Wire every Phase 1 channel to the controller / session store. Returns a
+ * disposer that removes the handlers again (so a window re-create never stacks
+ * duplicate listeners).
+ */
+export function registerIpc(fr24: Fr24Controller): () => void {
+  ipcMain.on(IpcChannels.fr24SetBounds, (_e, bounds: unknown) => {
+    if (!isBounds(bounds)) {
+      console.warn('[ipc] fr24:setBounds ignored — malformed bounds payload:', bounds)
+      return
+    }
+    fr24.setBounds(bounds)
+  })
+
+  ipcMain.on(IpcChannels.fr24Nav, (_e, action: unknown) => {
+    if (typeof action !== 'string' || !NAV_ACTIONS.includes(action as Fr24NavAction)) {
+      console.warn('[ipc] fr24:nav ignored — unknown action:', action)
+      return
+    }
+    fr24.nav(action as Fr24NavAction)
+  })
+
+  ipcMain.on(IpcChannels.fr24SetVisible, (_e, visible: unknown) => {
+    if (typeof visible !== 'boolean') {
+      console.warn('[ipc] fr24:setVisible ignored — non-boolean payload:', visible)
+      return
+    }
+    fr24.setVisible(visible)
+  })
+
+  ipcMain.handle(IpcChannels.sessionGet, () => {
+    return getSessionState()
+  })
+
+  ipcMain.on(IpcChannels.sessionPatch, (_e, patch: unknown) => {
+    if (typeof patch !== 'object' || patch === null) {
+      console.warn('[ipc] session:patch ignored — non-object payload:', patch)
+      return
+    }
+    patchSessionState(patch as SessionPatch)
+  })
+
+  return () => {
+    ipcMain.removeAllListeners(IpcChannels.fr24SetBounds)
+    ipcMain.removeAllListeners(IpcChannels.fr24Nav)
+    ipcMain.removeAllListeners(IpcChannels.fr24SetVisible)
+    ipcMain.removeHandler(IpcChannels.sessionGet)
+    ipcMain.removeAllListeners(IpcChannels.sessionPatch)
+  }
+}

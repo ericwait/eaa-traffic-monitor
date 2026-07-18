@@ -17,6 +17,20 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Three-panel resizable walking-skeleton layout (react-resizable-panels): ATC
+  audio (left), flight tracking (top right), live video (bottom right), with a
+  Help/About dialog.
+- Embedded FlightRadar24 browser panel: a native `WebContentsView` on a
+  persistent `persist:fr24` session (login and passed Cloudflare challenges
+  survive relaunch), a plain-Chrome user agent, back / forward / reload / home
+  navigation with a read-only address and loading indicator, pop-up blocking with
+  external links opening in the system browser, and last-URL restore so the map
+  reopens where it was left.
+- Native view bounds track the flight-tracking region gap-free (rAF-throttled),
+  and the view hides beneath overlays (the z-order rule) so dialogs are never
+  trapped behind it.
+- Typed IPC contract (`src/shared/ipc.ts`) shared across main, preload, and
+  renderer, exposed to the renderer as a typed `window.api`.
 - Project scaffold: electron-vite + TypeScript + React substrate (main / preload
   / renderer, strict TypeScript, three tsconfigs).
 - Privileged `app://` custom scheme serving the packaged renderer from a secure,

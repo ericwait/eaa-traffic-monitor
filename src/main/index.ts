@@ -2,6 +2,8 @@ import { app, BrowserWindow, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { APP_SCHEME, APP_ORIGIN, registerAppScheme } from './protocol'
+import { Fr24Controller } from './fr24'
+import { registerIpc } from './ipc'
 
 // ---------------------------------------------------------------------------
 // Privileged custom scheme registration.
@@ -21,6 +23,8 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+let fr24: Fr24Controller | null = null
+let disposeIpc: (() => void) | null = null
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -43,6 +47,29 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
+  })
+
+  // The FR24 panel is a native WebContentsView owned by the main process and
+  // attached to this window's content view. Create it here so its lifecycle is
+  // bound to the window's (see Fr24Controller.dispose on close, below).
+  fr24 = new Fr24Controller(mainWindow)
+  fr24.attach()
+  disposeIpc = registerIpc(fr24)
+
+  // A late-subscribing or reloaded renderer (HMR) misses the FR24 nav events
+  // that already fired; re-push current nav state once the renderer finishes
+  // loading so the toolbar is always in sync.
+  mainWindow.webContents.on('did-finish-load', () => {
+    fr24?.pushNavState()
+  })
+
+  // Tear the view/IPC down before the window is gone so quit never crashes on a
+  // dangling child view or duplicate listeners on re-create.
+  mainWindow.on('close', () => {
+    disposeIpc?.()
+    disposeIpc = null
+    fr24?.dispose()
+    fr24 = null
   })
 
   mainWindow.on('closed', () => {
