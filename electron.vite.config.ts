@@ -12,7 +12,12 @@ import react from '@vitejs/plugin-react'
 // relative for the privileged-scheme resolver to find it under out/renderer.
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    // electron-store (and its `conf` dependency) are ESM-only, but the main
+    // process is bundled to CommonJS (the package is not "type": "module"), so a
+    // plain `require('electron-store')` would throw at runtime. The documented
+    // electron-vite fix is to exclude it from externalization so Rollup bundles
+    // it (ESM -> CJS) into out/main. Everything else stays external.
+    plugins: [externalizeDepsPlugin({ exclude: ['electron-store'] })],
     resolve: {
       alias: {
         '@shared': resolve('src/shared')

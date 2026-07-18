@@ -27,7 +27,10 @@
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
-    "@electron-toolkit/utils": "^4.0.0"
+    "@electron-toolkit/utils": "^4.0.0",
+    "electron-store": "^11.0.2",
+    "react-resizable-panels": "^4.12.2",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
