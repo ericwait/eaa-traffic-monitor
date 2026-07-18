@@ -1,12 +1,46 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type {
+  AppApi,
+  Fr24Bounds,
+  Fr24NavAction,
+  Fr24NavState,
+  SessionPatch,
+  SessionState
+} from '@shared/ipc'
+import { IpcChannels } from '@shared/ipc'
 
-// The typed IPC contract lands in Phase 1 (see src/shared/README.md). For now
-// the preload only exposes the @electron-toolkit base bridge under `electron`,
-// with contextIsolation ON and nodeIntegration OFF (the default here). Feature
-// channels (config:get, audio:resolveStream, fr24:*, windows:openPopout, …)
-// are added to a project-owned `api` object as each phase needs them.
-const api = {}
+// The project-owned bridge. contextIsolation is ON and nodeIntegration OFF, so
+// the renderer never touches ipcRenderer directly — it calls this typed `api`
+// surface, which is the exact shape of AppApi from the shared contract. A
+// channel-name or payload change is a compile error here and in the renderer.
+const api: AppApi = {
+  fr24: {
+    setBounds: (bounds: Fr24Bounds): void => {
+      ipcRenderer.send(IpcChannels.fr24SetBounds, bounds)
+    },
+    nav: (action: Fr24NavAction): void => {
+      ipcRenderer.send(IpcChannels.fr24Nav, action)
+    },
+    setVisible: (visible: boolean): void => {
+      ipcRenderer.send(IpcChannels.fr24SetVisible, visible)
+    },
+    onNavState: (listener: (state: Fr24NavState) => void): (() => void) => {
+      // Wrap the caller's listener so we don't leak Electron's event object into
+      // the renderer, and return an unsubscribe that removes THIS wrapper (so a
+      // StrictMode/HMR re-mount can never stack duplicate listeners).
+      const handler = (_event: unknown, state: Fr24NavState): void => listener(state)
+      ipcRenderer.on(IpcChannels.fr24NavState, handler)
+      return () => ipcRenderer.removeListener(IpcChannels.fr24NavState, handler)
+    }
+  },
+  session: {
+    get: (): Promise<SessionState> => ipcRenderer.invoke(IpcChannels.sessionGet),
+    patch: (patch: SessionPatch): void => {
+      ipcRenderer.send(IpcChannels.sessionPatch, patch)
+    }
+  }
+}
 
 if (process.contextIsolated) {
   try {
