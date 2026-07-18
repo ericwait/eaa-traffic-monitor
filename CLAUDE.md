@@ -1,38 +1,59 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code and other agents working in this repository.
+Follow these instructions; they override default behavior.
 
-## Project Status
+## What this app is
 
-Greenfield project — no code, build system, or tests exist yet.
-The only content is `README.md`, the requirements document.
-There are no build/lint/test commands to run; add them to this file once a stack is chosen and scaffolded.
+A cross-platform Electron desktop dashboard for monitoring EAA AirVenture air traffic — three pillars: simultaneous ATC audio streams, a YouTube live-feed grid, and an embedded FlightRadar24 browser panel.
+Stack is locked: Electron + TypeScript (strict) + React, built with electron-vite, packaged with electron-builder — see [docs/development/TechStack.md](docs/development/TechStack.md).
 
-**Tech stack: undecided.** This must be settled with the user before implementation begins.
-The requirements (multi-monitor pop-out windows, an embedded browser panel for a site that blocks iframes, many simultaneous audio/video streams) point toward a desktop shell (Electron/Tauri-class) rather than a plain web app, but the user has not committed to one.
+## Commands
 
-## What This App Is
+Everything runs through `just` (run `just` alone to list all verbs):
 
-A unified dashboard for monitoring air traffic in and out of Oshkosh during the EAA AirVenture airshow.
-Three integrated pillars (full details in `README.md`):
+- `just dev` — install if needed, then run the app with HMR.
+- `just up` — build and preview the production app (loads over `app://`).
+- `just test` — vitest unit suite. `just e2e` — build, then Playwright-Electron smoke.
+- `just lint` — eslint, check-only. `just fmt` — prettier, writes in place. `just typecheck` — tsc, all tsconfigs, check-only.
+- `just version` — git-computed SemVer (CI is authoritative). `just reset` — DESTRUCTIVE clean (asks first).
+- `down` / `migrate` / `health` print "n/a for a desktop app" — this app has no server, datastore, or health endpoint.
 
-1. **ATC audio streams** — `.pls` stream URLs for tower/approach/departure.
-   Simultaneous playback of multiple streams with per-stream volume and mute, visual activity indicators (so the user can tell *which* stream audio is coming from), and stream prioritization.
-   The README calls this the most complex part: the core UX problem is overlapping radio calls across channels becoming unintelligible.
-2. **YouTube live feeds** — EAA's live channels, tiled in a grid with emphasis/promote layouts, full-screen for any feed, per-feed audio control, stream-identity overlays, and pop-out windows for additional monitors.
-3. **FlightRadar24 panel** — FlightRadar24 cannot be embedded via iframe, so it needs an embedded browser panel with full navigation.
-   It must be resizable and emphasizable independently of the YouTube grid.
+Run `just lint`, `just typecheck`, `just fmt`, and `just test` clean before every commit.
 
-## Key Constraints
+## Repository map
 
-- Simultaneous multi-stream audio playback with per-stream activity detection is the hardest requirement; design the audio architecture around it.
-- FlightRadar24's iframe restriction forces a browser-panel approach (e.g., Electron `WebContentsView`/webview or equivalent).
-- Multi-window/multi-monitor support is a first-class requirement, not an afterthought.
-- Performance with many concurrent audio + video streams must stay smooth; treat it as a design constraint from the start.
+- `src/main/` — main process: `index.ts` (lifecycle, `app://` scheme registration), `protocol.ts` (scheme handler). FR24, IPC, config, session, resolvers land here in later phases.
+- `src/preload/` — contextBridge; `index.ts` + `index.d.ts`. contextIsolation ON, nodeIntegration OFF.
+- `src/renderer/src/` — React UI. Seeded module folders: `audio/`, `youtube/`, `components/`, `state/` (each has a README placemarker).
+- `src/shared/` — code compiled by all three processes; import via `@shared/*`. The typed IPC contract will live here. Keep it free of Electron and DOM APIs.
+- `tests/unit/` (vitest), `tests/e2e/` (Playwright-Electron). `docs/` — split design/ (what & why) vs development/ (how); `decisions/` indexes inline decision stamps.
 
-## Documentation Conventions
+## Key conventions
 
-Markdown prose in this repo uses **semantic line breaks**: each sentence starts on its own line in the source, instead of being hard-wrapped at a fixed character count or crammed multiple-sentences-per-line.
-Rendered output is unchanged — CommonMark collapses a single newline inside a paragraph into a space — but git diffs stay scoped to the sentence that actually changed instead of rewrapping a whole paragraph.
-Rules: one sentence per line in prose; list bullets stay on one line if they're a single sentence, otherwise each sentence gets its own line with a 2-space hanging indent; tables, code fences, and mermaid diagrams are left untouched.
-`CODE_OF_CONDUCT.md` is exempt — it's kept verbatim as the standard Contributor Covenant text.
+- **Semantic line breaks** in all markdown prose: one sentence per line in the source; list bullets stay on one line if a single sentence, else one sentence per line with a 2-space hanging indent; leave tables, code fences, and mermaid untouched.
+  `CODE_OF_CONDUCT.md` is exempt (verbatim Contributor Covenant).
+  Prettier does NOT format markdown (see `.prettierignore`) precisely to protect this — do not remove that exclusion.
+- **Decision stamps:** record a decision inline where it's made, stamped `(decision YYYY-MM-DD)`, AND add a one-line row to [docs/decisions/README.md](docs/decisions/README.md) **in the same commit**. A stamp without a row, or a row without a stamp, is half-done.
+- **Docs split:** `design/` is implementation-agnostic (what & why); `development/` names tools (how). If a `design/` sentence names a library or tool beyond a brief parenthetical, it belongs in `development/`.
+- **Merge commits only — NEVER squash or rebase-merge.** GitVersion reads merge history to compute the version; squashing destroys that signal.
+- Commit subjects are plain imperative ("Add the audio engine"), not Conventional Commits. Match `git log`.
+- Every commit message ends with the trailer: `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+
+## Key gotchas (each is an instruction)
+
+- **Packaged renderer loads from `app://`, never `file://`.** The YouTube IFrame postMessage handshake and prod `enumerateDevices`/`setSinkId` need a secure, non-file origin. Dev uses the electron-vite dev server; everything else uses `app://` (see `src/main/`).
+- **LiveATC rejects non-browser user agents.** Every `.pls` resolve and stream fetch from the main process must send a browser-like `User-Agent`, and resolved URLs must be cached (resolve only on connect/reconnect) — never hammer with a bare/bot UA.
+- **ATC mute is a gain node set to 0, never `element.muted`.** Activity lights must keep working on muted streams; muting the element kills the signal the analyser reads.
+- **The VAD analyser taps PRE-gain.** Tapping post-duck creates a measurement feedback loop and oscillating ducking. Put the analyser parallel off the source, before the gain chain.
+- **Never use requestAnimationFrame in the audio engine.** rAF freezes when the window is hidden. Use `setInterval` (50 ms tick) and keep `backgroundThrottling: false` on the main window (already set).
+- **`WebContentsView` (FR24) paints ABOVE all DOM.** An HTML modal cannot cover it. Set `overlayOpen` → `fr24:setVisible(false)` under overlays/modals; use native Electron menus for anything dropping over the FR24 region.
+- **Git LFS + legacy Pages serves pointer files** until the Phase 5 Actions-based site build. Images on the published docs site stay broken until then; GitHub's own markdown rendering is fine. Leave `.gitattributes` alone — it routes png/jpg/mp3/wav/icns/ico through LFS.
+- **`ELECTRON_RUN_AS_NODE`** leaks from some IDE terminals and forces Electron into Node mode (no window). The justfile strips it; prefer running through `just`. Raw commands: prefix `env -u ELECTRON_RUN_AS_NODE`.
+
+## Boundaries
+
+- Never push to `main`. Never create tags or releases. Work on `feature/*` (or `fix/*`, `docs/*`) branches; PRs target `develop`.
+- Do not change GitHub settings or branch protection.
+- Ask before adding a new dependency — the Phase 0 dependency set is deliberate and version-pinned for interop (Vite 7 caps, not 8; classic TypeScript, not the 7.x port). New feature deps (zustand, zod, electron-store, react-resizable-panels) arrive with the phase that needs them.
+- Do not edit files under `docs/` prose with a formatter; they are semantic-line-break, human-owned.
