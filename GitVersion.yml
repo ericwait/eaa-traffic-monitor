@@ -1,0 +1,48 @@
+# The version number is computed from git history (tags, branch, distance),
+# never hand-edited. This file configures GitVersion as ONE way to do that
+# computation; semantic-release, hatch-vcs, and setuptools-scm are equivalents
+# for other ecosystems. The non-negotiable part is the principle (computed, not
+# hand-edited), not this specific tool.
+#
+# Coupling this file assumes: merge commits, never squash. GitVersion (like
+# every history-derived version tool) reads merge history to know what landed on
+# which branch and when — squash-merging collapses that history into a single
+# commit and the tool loses the signal it needs to compute anything from.
+
+# Start from the built-in GitHubFlow preset (one long-lived integration branch,
+# short-lived feature/fix/docs branches, releases cut from main) rather than
+# defining every branch rule from scratch.
+workflow: GitHubFlow/v1
+
+# The version to report before the first tag exists anywhere in history. Once
+# the first real tag lands (v0.1.0 or whatever it actually is), this stops
+# mattering — it's only a fallback for a repository with nothing yet to compute
+# a version from.
+next-version: 0.1.0
+
+# Accept tags with or without a leading "v" (both v1.2.3 and 1.2.3 parse), so
+# the release flow isn't locked into one spelling by this file alone.
+tag-prefix: 'v?'
+
+branches:
+  # develop is the integration branch every feature/fix/docs PR lands on first
+  # (see CONTRIBUTING.md for the full branch model). Its builds are pre-releases,
+  # never the real version bump — the real bump lands only when develop is
+  # released to main, via the develop-to-main PR and the tag that follows it.
+  develop:
+    # Every version computed on this branch carries the "alpha" pre-release
+    # label, so a develop build reads as e.g. 0.2.0-alpha.7 — unmistakably a
+    # pre-release, however far ahead of the last tag it is.
+    label: alpha
+    # Each commit on develop bumps the patch component that feeds the pre-release
+    # counter (the ".7" above): small, continuous movement. The real
+    # major/minor/patch decision is made deliberately at release time, not
+    # inferred commit-by-commit here.
+    increment: Patch
+    # ContinuousDelivery: every commit produces a versioned, potentially
+    # shippable pre-release build.
+    mode: ContinuousDelivery
+    # develop's version is computed relative to main's history — the branch it
+    # will eventually be released into — not relative to itself.
+    source-branches:
+      - main
