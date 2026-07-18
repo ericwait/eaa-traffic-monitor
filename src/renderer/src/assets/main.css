@@ -2,9 +2,12 @@
   color-scheme: dark;
   --bg: #0b0f14;
   --panel: #121821;
+  --panel-2: #0e141c;
   --ink: #e6edf3;
   --muted: #8b98a5;
   --accent: #3fb0ff;
+  --line: #1e2836;
+  --line-strong: #2b3a4d;
 }
 
 * {
@@ -28,50 +31,337 @@ body {
     Roboto,
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* the shell owns all layout; nothing scrolls the window */
 }
 
-.shell {
+/* ---------------------------------------------------------------------------
+   App shell + header
+--------------------------------------------------------------------------- */
+.app-shell {
   height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 2rem;
-  text-align: center;
+  overflow: hidden;
 }
 
-.badge {
-  font-size: 0.75rem;
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+
+.app-brand {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.app-badge {
+  font-size: 0.65rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   border-radius: 999px;
-  padding: 0.2rem 0.7rem;
+  padding: 0.1rem 0.5rem;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-h1 {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 650;
+.app-header-spacer {
+  flex: 1 1 auto;
 }
 
-.tagline {
+.help-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.help-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Resizable panel layout
+--------------------------------------------------------------------------- */
+.app-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.layout-group {
+  height: 100%;
+  width: 100%;
+}
+
+/* react-resizable-panels applies our className to a nested div inside the flex
+   item; make that content wrapper fill the panel and never scroll (the FR24
+   bounds math assumes no scroll offset). */
+[data-panel] {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+/* Separators (drag handles). The library owns flex-grow/shrink and cursor; we
+   own size and color. */
+.separator {
+  background: var(--line);
+  flex: 0 0 auto;
+}
+
+.separator:hover,
+.separator[data-active] {
+  background: var(--accent);
+}
+
+.separator-vertical {
+  width: 6px;
+}
+
+.separator-horizontal {
+  height: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   Panel chrome (heading strips) + placeholders
+--------------------------------------------------------------------------- */
+.panel-head {
+  flex: 0 0 auto;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.panel-title {
   margin: 0;
-  max-width: 40ch;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   color: var(--muted);
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.placeholder-body {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.placeholder-note {
+  margin: 0;
+  max-width: 32ch;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
   line-height: 1.5;
 }
 
-.uptime {
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
+/* ---------------------------------------------------------------------------
+   FR24 panel: toolbar + non-scrolling region
+--------------------------------------------------------------------------- */
+.fr24-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.fr24-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.fr24-btn {
+  width: 30px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fr24-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fr24-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.fr24-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.35rem;
+  padding: 0 0.6rem;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+
+.fr24-url-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
-.uptime span {
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
+.fr24-loading {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.fr24-loading.is-loading {
+  background: var(--accent);
+  animation: fr24-pulse 1s ease-in-out infinite;
+}
+
+@keyframes fr24-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The region the native FR24 WebContentsView is composited over. Non-scrolling
+   by contract. The hint is only visible when the view is hidden (overlay up) or
+   before the map paints. */
+.fr24-region {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2);
+}
+
+.fr24-region-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Modal (Help/About) — proves the z-order rule against the FR24 view
+--------------------------------------------------------------------------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(3, 6, 10, 0.6);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  width: min(520px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 1.25rem 1.4rem 1.1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.modal-body {
+  margin: 0 0 0.7rem;
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.modal-muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.modal-close {
+  padding: 0.45rem 1.1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #05202f;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  filter: brightness(1.08);
 }
