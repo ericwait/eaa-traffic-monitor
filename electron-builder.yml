@@ -1,0 +1,53 @@
+# electron-builder packaging config. Phase 0 lands the config so it typechecks
+# and `--dir` packaging is exercisable; the 3-OS release matrix and the
+# changelog gate arrive with Phase 5 (release.yml). Alpha artifacts are
+# UNSIGNED (CSC_IDENTITY_AUTO_DISCOVERY=false in CI) — no certificate exists yet.
+appId: com.ericwait.eaa-traffic-monitor
+productName: EAA Traffic Monitor
+directories:
+  buildResources: build
+  output: dist
+
+# electron-vite emits the built app to out/. Ship that plus package.json;
+# everything else (source, tests, docs) is excluded from the packaged app.
+files:
+  - out/**
+  - package.json
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierrc.yaml,.prettierignore}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{vitest.config.ts,playwright.config.ts}'
+  - '!tests/*'
+  - '!docs/*'
+
+# Do not resolve unpacked dependencies into the ASAR for native modules; none
+# yet, but keep the sane default the template ships.
+asarUnpack:
+  - resources/**
+
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+    - zip
+  # Unsigned alpha: skip Gatekeeper assessment fields that require a cert.
+  hardenedRuntime: false
+
+win:
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - AppImage
+  category: Utility
+
+# Never phone home during a dev/CI build looking for update metadata.
+publish: null
