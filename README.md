@@ -44,10 +44,10 @@ I would also like to be able to pop up additional windows to put on different mo
 
 ## Live Flight Radar Information
 
- lastly, I'd like to integrate flight radar 24 as my live air traffic window.
- I don't think this website has an iframe or way to embed, so we may have to use a browser panel and allow full browser style navigation of that website.
-  This should integrate with the live YouTube feeds, but be allowed to have its own emphasis separate from the YouTube feed.
-  In other words, I may want to have an emphasized video for my feed grid, and then the ability to resize the flight tracker independent of those videos.
+lastly, I'd like to integrate flight radar 24 as my live air traffic window.
+I don't think this website has an iframe or way to embed, so we may have to use a browser panel and allow full browser style navigation of that website.
+This should integrate with the live YouTube feeds, but be allowed to have its own emphasis separate from the YouTube feed.
+In other words, I may want to have an emphasized video for my feed grid, and then the ability to resize the flight tracker independent of those videos.
 
 - **Browser Panel**: Implement a browser panel that allows users to navigate and interact with the Flight Radar 24 website directly within the app.
 - **Resizable Window**: Allow users to resize the flight radar panel independently of the YouTube feed grid, providing flexibility in how they monitor air traffic information.
