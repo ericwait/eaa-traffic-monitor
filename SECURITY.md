@@ -10,4 +10,5 @@ If you discover a security vulnerability, please report it privately rather than
 
 - Email: eric.wait@wisc.edu
 
-Please include as much detail as possible (steps to reproduce, potential impact, affected component) so the report can be triaged quickly. You should expect an initial response within a few days.
+Please include as much detail as possible (steps to reproduce, potential impact, affected component) so the report can be triaged quickly.
+You should expect an initial response within a few days.

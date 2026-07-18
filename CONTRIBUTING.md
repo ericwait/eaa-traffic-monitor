@@ -1,6 +1,7 @@
 # Contributing to EAA Traffic Monitor
 
-Thanks for your interest in contributing! This project is in early planning stages — see [README.md](README.md) for the project vision and [CLAUDE.md](CLAUDE.md) for current status and open decisions.
+Thanks for your interest in contributing!
+This project is in early planning stages — see [README.md](README.md) for the project vision and [CLAUDE.md](CLAUDE.md) for current status and open decisions.
 
 ## Before you start
 
