@@ -29,7 +29,7 @@ If a sentence in `design/` names a language, library, or tool beyond a brief par
 
 **For engineering understanding:** [development/TechStack.md](development/TechStack.md) → [Implementation-Plan.md](Implementation-Plan.md) → root `CLAUDE.md` (agent context; rewritten in Phase 0)
 
-Planned, not built: `development/Getting-Started.md` and `development/Testing.md` land with Phase 0 scaffolding.
+Also under `development/`: [Getting-Started.md](development/Getting-Started.md) (zero-knowledge clone-and-run walkthrough) and [Testing.md](development/Testing.md) (test tiers and guardian rules), both landed with the Phase 0 scaffold.
 
 ## Conventions
 

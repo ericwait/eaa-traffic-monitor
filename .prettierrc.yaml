@@ -1,0 +1,12 @@
+# Formatting contract, shared by `just fmt`, the pre-commit prettier hook, and
+# the eslint-plugin-prettier rule — so local and CI never disagree about what
+# "formatted" means. Kept intentionally small: only where we differ from
+# prettier defaults.
+singleQuote: true
+semi: false
+printWidth: 100
+trailingComma: none
+# Never reflow prose. Markdown here uses semantic line breaks (one sentence per
+# line); combined with the **/*.md exclusion in .prettierignore this is
+# belt-and-suspenders so the formatter can never collapse a paragraph.
+proseWrap: preserve

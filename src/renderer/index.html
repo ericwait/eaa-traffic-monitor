@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content-Security-Policy for the renderer. Kept strict from day one: the
+      packaged renderer is served over the secure app:// scheme, so 'self'
+      covers our own bundle. Later phases relax specific directives as the
+      YouTube IFrame API (youtube.com frames) and FR24 WebContentsView needs
+      land — do that deliberately, per-source, never with a blanket wildcard.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app:"
+    />
+    <title>EAA Traffic Monitor</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
