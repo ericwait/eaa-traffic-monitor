@@ -1,0 +1,31 @@
+# Automated update PRs provide the security floor on every dependency track this
+# repo has.
+#
+# Minor/patch updates are grouped into a single PR per ecosystem per run —
+# they're low-risk by definition (SemVer), and one PR to review beats ten noisy
+# ones. Major updates are deliberately left ungrouped: they can carry breaking
+# changes and deserve their own PR, their own CI run, and their own review.
+version: 2
+
+updates:
+  # Keeps this repo's own CI workflows patched.
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    groups:
+      actions-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # The app's npm dependency tree (Electron, React, the toolchain).
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    groups:
+      npm-minor-patch:
+        update-types:
+          - 'minor'
+          - 'patch'

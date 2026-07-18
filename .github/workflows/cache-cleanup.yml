@@ -1,0 +1,48 @@
+name: Cache cleanup
+
+# Cost hygiene, fully working, no placeholders.
+#
+# Why this job exists at all:
+#
+# GitHub Actions scopes each cache to the ref that created it and will only ever
+# restore it to that same ref (or, for a PR, its base branch as a fallback) — a
+# cache built for `refs/pull/42/merge` cannot be reused by any other PR, any
+# other branch, or that same PR number reopened later (it gets a new merge ref).
+# The moment a pull request closes, every cache scoped to its merge ref is
+# permanently unreachable. It doesn't stop counting against the repository's
+# shared cache storage, though — it just sits there as dead weight against the
+# 10 GB repository cache cap.
+#
+# That's actively harmful, not just wasteful: GitHub evicts caches
+# least-recently-used once the cap is hit, and eviction doesn't know or care that
+# a dead PR's cache is worthless while a long-lived branch's cache is still in
+# daily use — it evicts whatever was touched longest ago, which is frequently a
+# *live* cache belonging to someone else's in-flight work. Deleting a closed
+# PR's caches immediately, on close, is strictly better than waiting for LRU
+# eviction to (eventually, maybe) reclaim the same space at random.
+on:
+  pull_request:
+    types: [closed]
+
+# The only permission this job needs: deleting Actions caches is a write under
+# the `actions` scope. No repo contents access is required at all.
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: Delete this PR's merge-ref caches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete caches scoped to refs/pull/<N>/merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # --succeed-on-no-caches makes this a no-op, not a failure, on a PR
+          # that never populated a cache (e.g. it was closed before CI ran) —
+          # this job should never be the reason a PR-close goes red.
+          gh cache delete --all --succeed-on-no-caches \
+            --repo "$REPO" \
+            --ref "refs/pull/${PR_NUMBER}/merge"

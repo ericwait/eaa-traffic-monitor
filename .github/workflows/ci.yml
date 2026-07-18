@@ -1,0 +1,142 @@
+name: CI
+
+# CI is tiered by risk and cost, and triggers on pull requests, not pushes, so
+# no minutes are spent twice. A branch with an open PR fires `pull_request` on
+# every push to it already; a `push:` trigger would run the whole matrix a
+# second time for the same commit. `workflow_dispatch` is the escape hatch for
+# re-running the gate without pushing an empty commit.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# One in-flight run per ref. A new push to the same PR makes the previous run's
+# result moot before it finishes, so cancel it rather than let two runs race.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: every job inherits read-only unless it declares more. None of
+# the jobs below need more.
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # FAST TIER — every PR. Minutes-not-hours by design: workflow lint, eslint,
+  # tsc, and the vitest unit tier. This is the tier a contributor waits on.
+  # ---------------------------------------------------------------------------
+
+  ops-validate:
+    name: Validate workflows (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Download the pinned binary directly rather than a third-party
+      # "setup-actionlint" marketplace action — one fewer supply-chain link for
+      # a tool that already ships versioned, checksummed release binaries. Bump
+      # this pin deliberately; see https://github.com/rhysd/actionlint/releases.
+      - name: Install actionlint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash | bash -s -- 1.7.12
+          echo "$PWD" >> "$GITHUB_PATH"
+
+      - name: Lint workflows
+        run: actionlint -color
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      # npm ci runs electron's postinstall (binary download); harmless for lint
+      # but keeps every FAST job on an identical, lockfile-pinned install.
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run typecheck
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
+
+  # ---------------------------------------------------------------------------
+  # FULL GATE — only on workflow_dispatch, or a PR whose base is `main` (the
+  # develop-to-main release PR). Every feature/fix/docs PR merges into develop,
+  # not main; paying the e2e + audit cost on each of those would make CI the
+  # thing people route around. Pay it once, at the door production walks through.
+  # ---------------------------------------------------------------------------
+
+  e2e-tests:
+    name: End-to-end (Playwright-Electron)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'main'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          lfs: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      # Electron needs an X server on headless Linux; xvfb-run provides one.
+      # `just e2e` builds the app first, then runs the Playwright smoke.
+      - name: Run e2e under xvfb
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' npm run e2e
+
+  vuln-scan:
+    name: Dependency audit (non-blocking, alpha)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'main'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      # NON-BLOCKING for the alpha: report high-severity advisories but do not
+      # fail the gate on them yet (`|| true`). Tighten to a hard gate post-show
+      # once the dependency surface has settled.
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high || true
+
+  version:
+    name: Compute version (authoritative)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history, not a shallow clone: a history-derived version is
+          # computed from tags and the commit distance since the last one, and a
+          # shallow clone can't see back far enough to find either.
+          fetch-depth: 0
+      - uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.x'
+      - id: gitversion
+        uses: gittools/actions/gitversion/execute@v4
+      - run: echo "computed version ${{ steps.gitversion.outputs.semVer }}"
