@@ -1,4 +1,8 @@
-# README
+# EAA Traffic Monitor
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**[View the project page](https://ericwait.github.io/eaa-traffic-monitor/)**
 
 I would like to create an app that helps me monitor multiple websites and audio streams at once for the traffic going in and out of Oshkosh during the EAA annual airshow.
 There are three main ways of monitoring the air traffic in and out of Oshkosh that I would like this app to manage.
@@ -54,3 +58,11 @@ I would also like to be able to pop up additional windows to put on different mo
 - **Customization Options**: Allow users to customize the appearance and behavior of the flight radar panel to suit their preferences and workflow, including options for different map views, filters, and data overlays.
 - **Integration with Other Features**: Ensure seamless integration with the audio streams and YouTube feeds, allowing users to monitor all aspects of air traffic in a unified interface.
 - **Data Refresh and Updates**: Implement automatic data refresh and updates for the flight radar panel to ensure that users have access to the most current air traffic information at all times.
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started, and please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

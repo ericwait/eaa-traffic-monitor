@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EAA Traffic Monitor</title>
+<meta name="description" content="A single dashboard for monitoring ATC audio, live YouTube feeds, and FlightRadar24 during the EAA AirVenture Oshkosh airshow.">
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --bg-panel: #ffffff;
+    --ink: #1c1c1a;
+    --ink-soft: #55554f;
+    --accent: #b3401f;
+    --border: #e3e1da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614;
+      --bg-panel: #201f1c;
+      --ink: #f1f0ec;
+      --ink-soft: #b8b6ac;
+      --accent: #e2683f;
+      --border: #33322c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 1.5rem; }
+  header {
+    padding: 4.5rem 0 3rem;
+    text-align: center;
+  }
+  .eyebrow {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 0.3rem 0.9rem;
+    margin-bottom: 1.25rem;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    margin: 0 0 0.75rem;
+    letter-spacing: -0.02em;
+  }
+  .tagline {
+    font-size: 1.15rem;
+    color: var(--ink-soft);
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .cta {
+    margin-top: 2rem;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-block;
+    padding: 0.65rem 1.4rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+  }
+  .btn.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn.secondary {
+    color: var(--ink);
+  }
+  main { padding-bottom: 4rem; }
+  section { margin-top: 3.5rem; }
+  h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+  }
+  .card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+  .card h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+  }
+  .card p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+  .status {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.75rem;
+    text-align: center;
+  }
+  .status p {
+    color: var(--ink-soft);
+    max-width: 560px;
+    margin: 0.5rem auto 0;
+  }
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem 0;
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+  }
+  footer a { color: var(--ink-soft); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <span class="eyebrow">Early planning stage</span>
+  <h1>EAA Traffic Monitor</h1>
+  <p class="tagline">
+    One dashboard for watching air traffic in and out of Oshkosh during EAA AirVenture —
+    ATC audio, live YouTube feeds, and FlightRadar24, together.
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/ericwait/eaa-traffic-monitor">View on GitHub</a>
+    <a class="btn secondary" href="https://github.com/ericwait/eaa-traffic-monitor/issues/new/choose">Suggest a feature</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <section>
+    <h2>Three feeds, one view</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>ATC Audio Streams</h3>
+        <p>
+          Listen to tower, approach, and departure streams at once, with independent
+          volume and mute per stream and a visual indicator for which channel is active —
+          so overlapping radio calls stay untangled.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Live YouTube Feeds</h3>
+        <p>
+          Tile EAA's live channels in a grid, emphasize or full-screen any one of them,
+          and pop feeds out into separate windows for a multi-monitor setup.
+        </p>
+      </div>
+      <div class="card">
+        <h3>FlightRadar24 Panel</h3>
+        <p>
+          A fully navigable, resizable browser panel for FlightRadar24, tracking live
+          air traffic alongside the video and audio feeds.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="status">
+    <h2>Status</h2>
+    <p>
+      This project is in early planning — the requirements are written, but the tech
+      stack and architecture haven't been chosen yet. Follow along or contribute on
+      <a href="https://github.com/ericwait/eaa-traffic-monitor">GitHub</a>.
+    </p>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>
+    <a href="https://github.com/ericwait/eaa-traffic-monitor/blob/main/LICENSE">MIT Licensed</a>
+    ·
+    <a href="https://github.com/ericwait/eaa-traffic-monitor/blob/main/CONTRIBUTING.md">Contributing</a>
+    ·
+    <a href="https://github.com/ericwait/eaa-traffic-monitor">Source</a>
+  </p>
+</footer>
+</body>
+</html>
