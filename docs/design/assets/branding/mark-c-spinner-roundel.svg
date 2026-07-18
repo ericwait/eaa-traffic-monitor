@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Spinner roundel dragon mark">
+  <style>
+    :root{ --ink:#0A3D1E; --accent:#B26A00; --bg:transparent; }
+    @media (prefers-color-scheme: dark){ :root{ --ink:#FFB000; --accent:#33FF66; } }
+    .ink{ fill:var(--ink); } .accent{ fill:var(--accent); }
+    .ring{ fill:none; stroke:var(--ink); stroke-width:4; }
+  </style>
+  <circle class="ring" cx="50" cy="50" r="45"/>
+  <g class="ink">
+    <path d="M26 60 C24 48 31 39 44 35 C49 28 58 26 65 29 C60 33 60 37 64 39 L75 39 C70 46 61 48 56 45 C58 53 53 62 44 66 C35 70 29 67 26 60 Z"/>
+    <path d="M52 32 C57 25 63 23 70 21 C65 29 60 33 56 37 Z"/>
+  </g>
+  <g class="accent">
+    <circle cx="51" cy="43" r="2.4"/>
+    <circle cx="73" cy="44" r="3"/>
+    <rect x="71.5" y="30" width="3" height="28" rx="1.5"/>
+    <rect x="59" y="42.5" width="28" height="3" rx="1.5" transform="rotate(60 73 44)"/>
+    <rect x="59" y="42.5" width="28" height="3" rx="1.5" transform="rotate(-60 73 44)"/>
+  </g>
+</svg>

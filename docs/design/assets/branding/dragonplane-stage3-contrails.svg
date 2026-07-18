@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Top-down dragon aircraft with bat-wing fingers, protruding engines and contrails">
+  <style>
+    :root{ --ink:#16233F; --bg:#ffffff; --trail:#16233F; }
+    @media (prefers-color-scheme: dark){ :root{ --ink:#F1E7D3; --bg:#10192E; --trail:#F1E7D3; } }
+    .ink{ fill:var(--ink); }
+    .bone{ stroke:var(--bg); stroke-width:2.4; stroke-linecap:round; fill:none; }
+    .nac{ fill:var(--bg); stroke:var(--ink); stroke-width:3; }
+  </style>
+  <defs>
+    <linearGradient id="trail" x1="0" y1="100" x2="0" y2="212" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="var(--trail)" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="var(--trail)" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#trail)">
+    <path d="M151 104 C149 145 148 172 149 208 L165 208 C165 172 164 145 163 104 Z"/>
+    <path d="M183 100 C182 140 182 166 184 202 L195 202 C195 166 194 140 194 100 Z"/>
+    <path d="M89 104 C91 145 92 172 91 208 L75 208 C75 172 76 145 77 104 Z"/>
+    <path d="M57 100 C58 140 58 166 56 202 L45 202 C45 166 46 140 46 100 Z"/>
+  </g>
+  <g class="ink">
+    <path d="M120 22 C128 28 130 39 126 49 L114 49 C110 39 112 28 120 22 Z"/>
+    <path d="M124 44 C133 45 140 51 144 61 C137 54 130 50 123 49 Z"/>
+    <path d="M116 44 C107 45 100 51 96 61 C103 54 110 50 117 49 Z"/>
+    <path d="M120 45 C131 60 134 116 127 165 C125 181 122 192 120 203 C118 192 115 181 113 165 C106 116 109 60 120 45 Z"/>
+    <path d="M120 191 C124 201 124 211 121 220 L127 229 L120 234 L113 229 L119 220 C116 211 116 201 120 191 Z"/>
+    <path d="M127 152 C140 153 149 160 154 171 C148 166 142 164 135 164 Z"/>
+    <path d="M113 152 C100 153 91 160 86 171 C92 166 98 164 105 164 Z"/>
+    <path d="M120 74 L131 69 C168 60 205 64 236 84 C224 90 214 90 206 93 C194 98 186 97 174 100 C160 106 152 106 141 111 C133 114 126 115 120 115 Z"/>
+    <path d="M120 74 L109 69 C72 60 35 64 4 84 C16 90 26 90 34 93 C46 98 54 97 66 100 C80 106 88 106 99 111 C107 114 114 115 120 115 Z"/>
+  </g>
+  <g class="bone">
+    <path d="M135 75 L222 85 M135 75 L200 92 M135 75 L170 99 M135 75 L140 109"/>
+    <path d="M105 75 L18 85 M105 75 L40 92 M105 75 L70 99 M105 75 L100 109"/>
+  </g>
+  <g class="nac">
+    <rect x="150" y="54" width="14" height="52" rx="7"/>
+    <rect x="182" y="58" width="12" height="44" rx="6"/>
+    <rect x="76" y="54" width="14" height="52" rx="7"/>
+    <rect x="46" y="58" width="12" height="44" rx="6"/>
+  </g>
+  <g class="ink">
+    <circle cx="157" cy="61" r="3.4"/>
+    <circle cx="188" cy="65" r="3"/>
+    <circle cx="83" cy="61" r="3.4"/>
+    <circle cx="52" cy="65" r="3"/>
+  </g>
+</svg>

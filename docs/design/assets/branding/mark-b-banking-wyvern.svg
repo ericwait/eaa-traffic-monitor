@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Banking wyvern dragon mark">
+  <style>
+    :root{ --ink:#16233F; --accent:#C0392B; --bg:transparent; }
+    @media (prefers-color-scheme: dark){ :root{ --ink:#F1E7D3; --accent:#C0392B; } }
+    .ink{ fill:var(--ink); } .accent{ fill:var(--accent); } .bg{ fill:var(--bg); }
+  </style>
+  <rect class="bg" width="100" height="100"/>
+  <g class="ink">
+    <path d="M14 82 C30 72 44 62 60 52 C67 47 73 45 80 41 L88 33 L83 42 C89 41 93 37 95 31 C93 41 87 47 80 50 C69 56 55 64 39 74 C31 78 22 82 14 82 Z"/>
+    <path d="M52 55 C46 41 41 30 30 23 C36 24 42 27 47 32 C50 30 53 32 54 36 C57 35 60 37 60 41 C58 44 55 45 52 44 C56 48 59 52 61 50 Z"/>
+    <path d="M83 38 C87 31 89 27 94 22 C91 30 88 35 85 40 Z"/>
+    <path d="M87 37 L97 34 L89 43 Z"/>
+  </g>
+  <g class="accent">
+    <circle cx="85" cy="36" r="1.8"/>
+    <path d="M14 82 C8 80 5 76 6 71 C7 75 10 77 15 78 Z"/>
+  </g>
+</svg>
