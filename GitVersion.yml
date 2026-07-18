@@ -30,6 +30,12 @@ branches:
   # never the real version bump — the real bump lands only when develop is
   # released to main, via the develop-to-main PR and the tag that follows it.
   develop:
+    # GitHubFlow (unlike GitFlow) has no built-in develop branch, so this is a
+    # brand-new branch definition with nothing to inherit a pattern from — a
+    # custom branch on a GitHubFlow base must carry its own regex or GitVersion
+    # fails validation ("missing required configuration 'regex'"). Match the
+    # branch named exactly "develop".
+    regex: ^develop$
     # Every version computed on this branch carries the "alpha" pre-release
     # label, so a develop build reads as e.g. 0.2.0-alpha.7 — unmistakably a
     # pre-release, however far ahead of the last tag it is.
