@@ -29,6 +29,11 @@ asarUnpack:
 
 mac:
   category: public.app-category.utilities
+  # A pre-built multi-resolution .icns (16→1024) generated on macOS from the
+  # 1024 Ember master via sips/iconutil (design/brand/icns/). electron-builder
+  # uses a supplied .icns as-is without re-encoding, so the dock/Finder icon is
+  # the true crisp warbird mark at every size.
+  icon: design/brand/icns/app-icon-ember.icns
   target:
     - dmg
     - zip
@@ -36,6 +41,11 @@ mac:
   hardenedRuntime: false
 
 win:
+  # electron-builder requires a Windows source icon of at least 256×256 and
+  # converts a PNG master to the multi-size .ico itself. The shipped
+  # ico/favicon.ico is only 16/32/48 (below that floor), so it is NOT usable
+  # here — point at the 1024 Ember master instead.
+  icon: design/brand/png/app-icon-ember-1024.png
   target:
     - nsis
 
@@ -45,6 +55,9 @@ nsis:
   allowToChangeInstallationDirectory: true
 
 linux:
+  # Linux takes the same 1024 PNG master (min 256×256); electron-builder derives
+  # the standard 16→512 PNG icon set for the AppImage from it.
+  icon: design/brand/png/app-icon-ember-1024.png
   target:
     - AppImage
   category: Utility

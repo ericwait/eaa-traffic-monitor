@@ -1,6 +1,11 @@
 import { app, BrowserWindow, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
+// Runtime window icon (Windows/Linux). electron-vite copies this PNG into out/
+// at build and resolves the import to its on-disk path; it ships inside out/**.
+// macOS ignores BrowserWindow.icon (it uses the app bundle's .icns), so this is
+// only applied off-darwin — see createWindow / PopoutManager.
+import appIcon from '../../design/brand/png/app-icon-ember-512.png?asset'
 import { APP_SCHEME, APP_ORIGIN, registerAppScheme } from './protocol'
 import { startRendererServer } from './rendererServer'
 import type { RendererServer } from './rendererServer'
@@ -40,6 +45,11 @@ let rendererServer: RendererServer | null = null
 // The pop-out window manager (Phase 4). Created once at ready and shared with the
 // windows:* IPC handlers; owns every pop-out BrowserWindow and its session slice.
 let popouts: PopoutManager | null = null
+
+// The window icon applied at runtime on Windows/Linux; undefined on macOS, which
+// draws the dock/window icon from the app bundle's .icns instead. Shared with
+// every pop-out so a second-monitor window carries the same mark.
+const windowIcon = process.platform === 'darwin' ? undefined : appIcon
 
 /**
  * Decide the URL a renderer loads from, appending `query` (e.g. `?window=popout&id=1`):
@@ -95,6 +105,7 @@ function createWindow(): void {
     show: false,
     backgroundColor: '#0b0f14',
     title: 'Airshow Traffic Monitor',
+    ...(windowIcon ? { icon: windowIcon } : {}),
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -189,7 +200,7 @@ app
     // Create the pop-out manager and register the app-global IPC BEFORE any
     // window loads — pop-outs (and the main window) call session/config/windows
     // handlers during their renderer bootstrap.
-    popouts = new PopoutManager(resolveRendererUrl)
+    popouts = new PopoutManager(resolveRendererUrl, windowIcon)
     // The weather poller is created with the main window (after this), so the
     // global handlers take a getter rather than the instance.
     disposeGlobalIpc = registerGlobalIpc(popouts, () => weatherPoller)

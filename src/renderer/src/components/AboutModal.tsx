@@ -1,4 +1,7 @@
 import { useEffect, useRef } from 'react'
+// The adaptive Wyvern Watch mark, imported as a bundled asset URL (never inlined
+// as raw SVG) and shown larger above the dialog title.
+import brandMark from '../../../../design/brand/svg/icon.svg'
 
 // A small Help/About modal — deliberately real, not a stub. It exists to PROVE
 // the z-order rule end to end: it overlaps the FR24 region, and because a
@@ -33,6 +36,7 @@ function AboutModal({ onClose }: AboutModalProps): React.JSX.Element {
         aria-labelledby="about-title"
         onClick={(e) => e.stopPropagation()}
       >
+        <img className="about-modal-mark" src={brandMark} alt="" aria-hidden="true" />
         <h2 id="about-title" className="modal-title">
           Airshow Traffic Monitor
         </h2>
