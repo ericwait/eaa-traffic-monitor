@@ -17,6 +17,22 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Live Video panel: a YouTube grid tiling the curated EAA cams (Warbirds,
+  Ultralights, Seaplane Base, Green Dot, Vintage, Boeing Plaza, and the
+  opening-weekend featured stream), in a uniform grid or an emphasized
+  one-big-tile-plus-rail layout.
+  Every tile carries an always-visible name and LIVE/OFFLINE badge, an
+  on-hover volume slider and mute toggle, and explicit emphasize/demote and
+  fill-panel controls alongside the double-click gesture (a real YouTube
+  embed can swallow clicks landing on its own picture, so the buttons are the
+  guaranteed-reliable path).
+  Fill-panel mode replaces the whole video panel with one feed; Escape
+  returns to the grid.
+  Offline or errored feeds show a labeled placeholder naming the feed, the
+  videoId, and what to do, never a black tile.
+  Per docs/design/Video.md's honest audio boundary, per-feed audio is
+  IFrame-API volume/mute only, on the system default output device — YouTube
+  audio cannot join the ATC engine's ducking, pan, or device routing.
 - Three-panel resizable walking-skeleton layout (react-resizable-panels): ATC
   audio (left), flight tracking (top right), live video (bottom right), with a
   Help/About dialog.
