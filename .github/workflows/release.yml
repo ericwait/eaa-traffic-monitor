@@ -1,0 +1,168 @@
+name: Release
+
+# Turns a version tag into downloadable UNSIGNED installers on a public GitHub
+# Release (Phase 5). Flow: a `v*` tag →
+#   1. changelog gate — refuse to release a version CHANGELOG.md doesn't document,
+#   2. a 3-OS electron-builder matrix — macOS / Windows / Linux installers,
+#   3. one GitHub Release with every artifact attached and the changelog section
+#      as its notes.
+# Alpha artifacts are unsigned (CSC_IDENTITY_AUTO_DISCOVERY=false) — no signing
+# certificate exists yet (see docs/development/TechStack.md § Known limitations).
+#
+# Tag spelling: GitVersion accepts `v?` (see GitVersion.yml), but the RELEASE tag
+# convention is `v` + SemVer (e.g. v0.1.0). The gate strips the leading `v`.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Least privilege: read by default. Only the final publish job is granted
+# contents: write, the scope that creates a Release and uploads assets.
+permissions:
+  contents: read
+
+jobs:
+  changelog-gate:
+    name: Gate on CHANGELOG section
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Tag $tag -> version $version"
+
+      # The CHANGELOG is the release contract (see its header comment): a version
+      # with no `## [x.y.z]` section is a release nobody wrote release notes for,
+      # so fail loudly here instead of publishing an undocumented build. The dot
+      # in the version is escaped so 0.1.0 can't match 0x1x0.
+      - name: Require a CHANGELOG section for this version
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          pattern="^## \[${VERSION//./\\.}\]"
+          if grep -qE "$pattern" CHANGELOG.md; then
+            echo "CHANGELOG.md documents [$VERSION]."
+          else
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section. Move the [Unreleased] entries under a [$VERSION] heading before tagging." >&2
+            exit 1
+          fi
+
+  build:
+    name: Build installers (${{ matrix.os }})
+    needs: changelog-gate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Don't let one OS's failure cancel the others — a broken Windows build
+      # shouldn't throw away good macOS and Linux artifacts.
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    defaults:
+      run:
+        # git-bash on the Windows runner too, so the version/packaging steps are
+        # one script across all three OSes.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # LFS-aware: any icon/asset electron-builder pulls from an LFS path
+          # must be the real binary, not a pointer file.
+          lfs: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Build the renderer/main/preload bundles, then package. `--publish never`
+      # keeps electron-builder from touching GitHub — the release job owns
+      # publishing. `extraMetadata.version` stamps the tag's version onto the
+      # artifacts without hand-editing package.json (its version stays 0.0.0; the
+      # authoritative version is git-derived).
+      - name: Build and package (unsigned)
+        env:
+          # Unsigned alpha: never try to auto-discover a signing identity.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          VERSION: ${{ needs.changelog-gate.outputs.version }}
+        run: |
+          npm run build
+          npx electron-builder --publish never -c.extraMetadata.version="$VERSION"
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          # electron-builder writes to dist/. Only ship user-facing installers;
+          # cross-OS globs that match nothing on this runner are fine.
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+            dist/*.AppImage
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: [changelog-gate, build]
+    runs-on: ubuntu-latest
+    # The only job that writes: creating the Release and uploading its assets.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          # No `name` → collect every matrix artifact into artifacts/<name>/.
+          path: artifacts
+
+      # Pull just this version's section out of the CHANGELOG for the release
+      # notes — from the `## [x.y.z]` header to the next `## ` header.
+      - name: Extract release notes
+        env:
+          VERSION: ${{ needs.changelog-gate.outputs.version }}
+        run: |
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { inSection=1; next }
+            inSection && /^## / { exit }
+            inSection { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "Release $VERSION" > notes.md
+          fi
+          echo "----- release notes -----"
+          cat notes.md
+
+      - name: Create the Release and upload installers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Collect every downloaded installer; mapfile is space-safe (the
+          # productName "Airshow Traffic Monitor" puts spaces in dmg names).
+          mapfile -t files < <(find artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' \) | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No installer artifacts were produced." >&2
+            exit 1
+          fi
+          printf 'Attaching: %s\n' "${files[@]}"
+          # A SemVer pre-release identifier (the `-` in e.g. v0.1.0-alpha.1)
+          # marks the GitHub Release as a pre-release; v0.1.0 is a full release.
+          prerelease=""
+          if [[ "$TAG" == *-* ]]; then prerelease="--prerelease"; fi
+          gh release create "$TAG" "${files[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes-file notes.md \
+            $prerelease

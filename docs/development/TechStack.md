@@ -65,6 +65,14 @@ It's the third that rules out a plain web app outright, and once a desktop shell
   Electron's multi-process model costs real memory next to a single native binary.
   Weighed against what it replaces — six standalone VLC instances, a separate FR24 browser window, and dozens of YouTube tabs across two monitors — the prototype this app retires was never light either.
 
+## Versioning and releases
+
+The version is computed from git history, never hand-edited (decision 2026-07-18) — `package.json` stays at `0.0.0` on purpose.
+GitVersion reads the GitHubFlow history: every commit on `develop` is an `-alpha.N` pre-release (for example `0.1.0-alpha.7`), and the real major/minor/patch is decided only when `develop` is released to `main` and tagged.
+CI is the authoritative computer of that version — the `version` job in [ci.yml](https://github.com/ericwait/airshow-traffic-monitor/blob/main/.github/workflows/ci.yml) runs GitVersion on a full-history checkout, and `just version` is a local convenience that prints the same SemVer and degrades to an install hint when GitVersion is absent.
+Releases are cut by pushing a `v` + SemVer tag (for example `v0.1.0`): [release.yml](https://github.com/ericwait/airshow-traffic-monitor/blob/main/.github/workflows/release.yml) gates on a matching `CHANGELOG.md` section, builds the unsigned three-OS installers, stamps the tag's version onto the artifacts, and publishes them to a GitHub Release.
+A tag carrying a pre-release identifier (the `-` in `v0.1.0-alpha.1`) publishes as a GitHub pre-release; a clean `v0.1.0` publishes as a full release.
+
 ## Known limitations
 
 - **YouTube audio is volume/mute only.**

@@ -121,7 +121,7 @@ An invalid edit (bad JSON, a value out of range) never crashes the app: it falls
 
 **Video feed IDs** are not in `config.json` yet.
 EAA's YouTube lineup rotates — often daily during the show — so a configured feed can go stale mid-week.
-For now, edit the list directly in [`src/renderer/src/youtube/defaultFeeds.ts`](../../src/renderer/src/youtube/defaultFeeds.ts) (swap the `videoId`, and the `label` if the cam itself changed), then run `just dev` again.
+For now, edit the list directly in [`src/renderer/src/youtube/defaultFeeds.ts`](https://github.com/ericwait/airshow-traffic-monitor/blob/main/src/renderer/src/youtube/defaultFeeds.ts) (swap the `videoId`, and the `label` if the cam itself changed), then run `just dev` again.
 Folding this into `config.json` is planned, not built.
 
 ## Morning radio checklist
@@ -173,7 +173,7 @@ Either way the stream keeps retrying with backoff on its own — nothing in the 
 
 **A video tile shows its offline placeholder** (or the grid worked yesterday and one tile is dark today).
 EAA rotates which YouTube videoId is actually live, often daily during the show — the configured id has likely expired.
-Find the feed's new id from EAA's live channel and update the matching entry's `videoId` (and `label`, if the cam changed) in [`src/renderer/src/youtube/defaultFeeds.ts`](../../src/renderer/src/youtube/defaultFeeds.ts), then run `just dev` again — see § Changing what you monitor.
+Find the feed's new id from EAA's live channel and update the matching entry's `videoId` (and `label`, if the cam changed) in [`src/renderer/src/youtube/defaultFeeds.ts`](https://github.com/ericwait/airshow-traffic-monitor/blob/main/src/renderer/src/youtube/defaultFeeds.ts), then run `just dev` again — see § Changing what you monitor.
 
 **`just: command not found`.**
 The task runner isn't installed or isn't on your `PATH`.
@@ -191,4 +191,4 @@ See [TechStack.md](TechStack.md) § Known limitations.
 - Audio behavior in depth: [../design/Audio.md](../design/Audio.md).
 - Video grid behavior in depth: [../design/Video.md](../design/Video.md).
 - The full documentation map: [../README.md](../README.md).
-- Agent-facing conventions and gotchas: [`../../CLAUDE.md`](../../CLAUDE.md) at the repository root.
+- Agent-facing conventions and gotchas: [`CLAUDE.md`](https://github.com/ericwait/airshow-traffic-monitor/blob/main/CLAUDE.md) at the repository root.
