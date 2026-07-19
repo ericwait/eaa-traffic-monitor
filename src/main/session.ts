@@ -12,12 +12,13 @@ import type { SessionState, SessionPatch } from '@shared/ipc'
 // in-memory default and logs what happened and what it did about it.
 
 const DEFAULTS: SessionState = {
-  fr24: { lastUrl: null }
+  fr24: { lastUrl: null },
+  audio: { devices: {} }
 }
 
 /** Deep-ish clone of the small defaults so callers can never mutate the source. */
 function freshDefaults(): SessionState {
-  return { fr24: { ...DEFAULTS.fr24 } }
+  return { fr24: { ...DEFAULTS.fr24 }, audio: { devices: {} } }
 }
 
 // The store is created lazily on first use (after app `ready`, so userData is
@@ -58,12 +59,23 @@ function getStore(): ElectronStore<SessionState> | null {
  */
 export function getSessionState(): SessionState {
   const s = getStore()
-  if (!s) return memoryFallback ? { fr24: { ...memoryFallback.fr24 } } : freshDefaults()
+  if (!s) {
+    return memoryFallback
+      ? {
+          fr24: { ...memoryFallback.fr24 },
+          audio: { devices: { ...memoryFallback.audio.devices } }
+        }
+      : freshDefaults()
+  }
   try {
     // electron-store returns the stored value merged over defaults; be defensive
     // about the nested shape in case an older/hand-edited file is missing it.
     const fr24 = s.get('fr24')
-    return { fr24: { lastUrl: fr24?.lastUrl ?? null } }
+    const audio = s.get('audio')
+    return {
+      fr24: { lastUrl: fr24?.lastUrl ?? null },
+      audio: { devices: { ...(audio?.devices ?? {}) } }
+    }
   } catch (err: unknown) {
     console.warn('[session] failed to read session state; using defaults:', err)
     return freshDefaults()
@@ -85,6 +97,23 @@ export function patchSessionState(patch: SessionPatch): void {
         s.set('fr24', merged)
       } else if (memoryFallback) {
         memoryFallback.fr24 = merged
+      }
+    }
+
+    if (patch.audio?.devices) {
+      // Merge per-stream device selections into the stored map. A null value
+      // clears that stream's route (back to the system default) rather than
+      // persisting null — resetting a route is a first-class patch.
+      const current = (s ? s.get('audio') : memoryFallback?.audio)?.devices ?? {}
+      const merged: SessionState['audio']['devices'] = { ...current }
+      for (const [id, selection] of Object.entries(patch.audio.devices)) {
+        if (selection === null) delete merged[id]
+        else merged[id] = selection
+      }
+      if (s) {
+        s.set('audio', { devices: merged })
+      } else if (memoryFallback) {
+        memoryFallback.audio = { devices: merged }
       }
     }
   } catch (err: unknown) {

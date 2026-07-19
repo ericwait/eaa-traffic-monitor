@@ -848,3 +848,95 @@ body {
   cursor: pointer;
   accent-color: var(--accent);
 }
+
+/* Priority rank badge (Phase 2b) — small, muted; 1 = highest. */
+.priority-badge {
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+}
+
+/* Solo button — sits beside mute. Pressed = the manual override is held. */
+.solo-btn {
+  flex: 0 0 auto;
+  min-width: 44px;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.solo-btn:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.solo-btn[aria-pressed='true'] {
+  color: #05202f;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* A strip dimmed because a solo is held on a DIFFERENT channel. */
+.stream-strip[data-soloed-elsewhere='true'] {
+  opacity: 0.55;
+}
+
+.stream-strip[data-soloed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* Output-device row. */
+.stream-strip-device {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.device-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 0.35rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.device-select:hover {
+  border-color: var(--accent);
+}
+
+/* Dev-only duck-gain readout: lets ducking be SEEN without being heard. */
+.duck-readout {
+  flex: 0 0 auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.62rem;
+  color: var(--muted);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+/* Per-strip routing notice, e.g. a routed device was unplugged. */
+.device-notice {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--warn);
+}

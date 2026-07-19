@@ -1,7 +1,7 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
-import { join } from 'path'
 import { defaultFeeds } from '../../src/renderer/src/youtube/defaultFeeds'
+import { mainEntry, getMainWindow, e2eEnv } from './support'
 
 // Live-video-grid smoke. Proves the grid tiles every configured feed and that
 // double-click emphasis actually changes the store/DOM — WITHOUT depending on
@@ -15,38 +15,27 @@ import { defaultFeeds } from '../../src/renderer/src/youtube/defaultFeeds'
 // Prerequisite: `electron-vite build` must have run so out/main/index.js and
 // out/renderer exist. `just e2e` builds first.
 
-const projectRoot = join(__dirname, '..', '..')
-const mainEntry = join(projectRoot, 'out', 'main', 'index.js')
-
 let app: ElectronApplication
 let page: Page
 
-// Same window-selection pattern as launch.spec.ts: the app has TWO
-// webContents (the main app:// renderer and the FR24 WebContentsView under
-// about:blank in e2e), so select the main renderer explicitly rather than
-// relying on creation order.
-async function getMainWindow(electronApp: ElectronApplication): Promise<Page> {
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    const main = electronApp.windows().find((p) => p.url().startsWith('app://'))
-    if (main) return main
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  throw new Error('e2e: the main app:// renderer window never appeared')
-}
-
 test.beforeAll(async () => {
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key === 'ELECTRON_RUN_AS_NODE' || key === 'ELECTRON_RENDERER_URL') continue
-    if (value !== undefined) env[key] = value
-  }
-  env.NODE_ENV = 'production'
-  // Keep the FR24 view off the network, same as launch.spec.ts — irrelevant to
-  // this suite but required for the app to boot deterministically in CI.
-  env.FR24_URL_OVERRIDE = 'about:blank'
+  app = await electron.launch({ args: [mainEntry], env: e2eEnv() })
 
-  app = await electron.launch({ args: [mainEntry], env })
+  // Keep YouTube off the network so every tile stays in its offline placeholder
+  // state — the deterministic target this suite's double-click gestures rely on.
+  // On CI (network-restricted) this holds anyway; the block makes it hold on a
+  // developer machine too, now that the packaged renderer loads from a real http
+  // origin (Phase 2b) and the IFrame API would otherwise succeed and hand the
+  // tiles LIVE iframes that swallow a synthetic double-click (see the note on the
+  // demote test below). Installed before the first window paints, so the renderer
+  // never reaches YouTube.
+  await app.evaluate(({ session }) => {
+    session.defaultSession.webRequest.onBeforeRequest(
+      { urls: ['*://*.youtube.com/*', '*://*.ytimg.com/*', '*://*.googlevideo.com/*'] },
+      (_details, callback) => callback({ cancel: true })
+    )
+  })
+
   await app.firstWindow()
   page = await getMainWindow(app)
   await page.waitForLoadState('domcontentloaded')

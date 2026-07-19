@@ -2,6 +2,8 @@ import { app, BrowserWindow, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { APP_SCHEME, APP_ORIGIN, registerAppScheme } from './protocol'
+import { startRendererServer } from './rendererServer'
+import type { RendererServer } from './rendererServer'
 import { Fr24Controller } from './fr24'
 import { registerIpc } from './ipc'
 
@@ -25,6 +27,49 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | null = null
 let fr24: Fr24Controller | null = null
 let disposeIpc: (() => void) | null = null
+// The loopback renderer server (Phase 2b, decision 2026-07-19). Started once and
+// reused across window (re)creation; closed on quit.
+let rendererServer: RendererServer | null = null
+
+/**
+ * Decide the URL the main renderer loads from:
+ *   dev server present (ELECTRON_RENDERER_URL) -> the electron-vite HMR server,
+ *   otherwise                                  -> the loopback http server,
+ *   loopback bind failure                      -> the app:// scheme (degraded).
+ *
+ * The packaged renderer is served over http (not app://) because the YouTube
+ * IFrame API validates the embedding origin and rejects app:// (error 153); a
+ * real http(s) origin is required. app:// stays registered as the fallback.
+ */
+async function rendererUrlToLoad(): Promise<string> {
+  const devServerUrl = process.env['ELECTRON_RENDERER_URL']
+  if (devServerUrl) return devServerUrl
+
+  if (!rendererServer) {
+    try {
+      rendererServer = await startRendererServer()
+    } catch (err: unknown) {
+      console.warn(
+        '[main] the loopback renderer server failed to start — YouTube tiles will be blank ' +
+          '(embed-origin validation rejects app://) — falling back to the app:// scheme:',
+        err
+      )
+      return `${APP_ORIGIN}/index.html`
+    }
+  }
+  return `${rendererServer.url}/index.html`
+}
+
+/** Resolve the renderer URL, then load it into the window (guarded + logged). */
+async function loadRenderer(win: BrowserWindow): Promise<void> {
+  const url = await rendererUrlToLoad()
+  if (win.isDestroyed()) return
+  try {
+    await win.loadURL(url)
+  } catch (err: unknown) {
+    console.error(`[main] failed to load the renderer at ${url}:`, err)
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -77,22 +122,12 @@ function createWindow(): void {
   })
 
   // The renderer load path is keyed off ELECTRON_RENDERER_URL — the dev-server
-  // signal electron-vite sets during `just dev`. Its presence, NOT is.dev, is
-  // the correct discriminator: a built-but-unpackaged run (e2e, `just up`) has
-  // app.isPackaged === false yet no dev server, and must still load app://.
-  //   dev server present -> HMR dev server
-  //   otherwise          -> packaged renderer over the secure app:// scheme
-  const devServerUrl = process.env['ELECTRON_RENDERER_URL']
-  if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl).catch((err: unknown) => {
-      console.error(`[main] failed to load renderer dev server at ${devServerUrl}:`, err)
-    })
-  } else {
-    const url = `${APP_ORIGIN}/index.html`
-    mainWindow.loadURL(url).catch((err: unknown) => {
-      console.error(`[main] failed to load packaged renderer at ${url}:`, err)
-    })
-  }
+  // signal electron-vite sets during `just dev`. Its presence, NOT is.dev, is the
+  // correct discriminator: a built-but-unpackaged run (e2e, `just up`) has
+  // app.isPackaged === false yet no dev server, and must still load the packaged
+  // renderer — now from the loopback http server (app:// only on its failure).
+  // See rendererUrlToLoad above.
+  void loadRenderer(mainWindow)
 }
 
 app
@@ -135,4 +170,10 @@ app
 // than lingering as a headless dock icon with no audio (see CLAUDE.md).
 app.on('window-all-closed', () => {
   app.quit()
+})
+
+// Release the loopback renderer server's port on the way out.
+app.on('will-quit', () => {
+  rendererServer?.close()
+  rendererServer = null
 })

@@ -87,6 +87,26 @@ describe('configSchema parsing', () => {
     const result = configSchema.safeParse({ ...DEFAULT_CONFIG, streams: [] })
     expect(result.success).toBe(false)
   })
+
+  it('fills in the ducking τ defaults when a Phase-2a config omits them', () => {
+    // A config.json written before Phase 2b only had ducking.duckLevel; the new
+    // τ fields must default in rather than reject the whole file.
+    const parsed = configSchema.parse({
+      ...DEFAULT_CONFIG,
+      ducking: { duckLevel: 0.3 }
+    })
+    expect(parsed.ducking.duckLevel).toBe(0.3)
+    expect(parsed.ducking.duckTauS).toBe(0.05)
+    expect(parsed.ducking.releaseTauS).toBe(0.2)
+  })
+
+  it('rejects a non-positive ducking τ', () => {
+    const result = configSchema.safeParse({
+      ...DEFAULT_CONFIG,
+      ducking: { duckLevel: 0.25, duckTauS: 0, releaseTauS: 0.2 }
+    })
+    expect(result.success).toBe(false)
+  })
 })
 
 describe('formatConfigError', () => {

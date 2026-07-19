@@ -70,22 +70,48 @@ export interface Fr24NavState {
 }
 
 // ---------------------------------------------------------------------------
-// Session payloads. Deliberately minimal for Phase 1 — just the FR24 last URL,
-// which restores the map position nearly for free (FR24 encodes the view into
-// its own URL). Later phases extend `SessionState` (window bounds, panel layout,
-// per-stream audio settings, video layout, popouts); `SessionPatch` grows with
-// it. Keep both shapes in lockstep.
+// Session payloads. Phase 1 persisted just the FR24 last URL; Phase 2b adds the
+// per-stream ATC output-device selection (so "Tower on headphones, the rest on
+// speakers" survives a relaunch). Later phases extend `SessionState` further
+// (window bounds, panel layout, per-stream volume/mute/pan, video layout,
+// popouts); `SessionPatch` grows with it. Keep both shapes in lockstep.
 // ---------------------------------------------------------------------------
+
+/**
+ * A remembered output-device choice for one ATC stream. Both fields are stored:
+ * the `deviceId` is tried first, and the human `deviceLabel` is the match-by-name
+ * fallback when a device replug hands the same physical output a fresh id.
+ */
+export interface AudioDeviceSelection {
+  deviceId: string
+  deviceLabel: string
+}
+
 export interface SessionState {
   fr24: {
     /** The last FR24 URL visited, or null before the first visit / on reset. */
     lastUrl: string | null
+  }
+  audio: {
+    /**
+     * Per-stream output device, keyed by stream id. A stream absent from this
+     * map plays on the system default output (the common case).
+     */
+    devices: Record<string, AudioDeviceSelection>
   }
 }
 
 /** A shallow, per-section partial applied by `session:patch`. */
 export interface SessionPatch {
   fr24?: Partial<SessionState['fr24']>
+  audio?: {
+    /**
+     * Per-stream device selections to merge into the stored map. A `null` value
+     * for a stream id CLEARS its selection (back to the system default) rather
+     * than storing null — so resetting a route is a first-class patch.
+     */
+    devices?: Record<string, AudioDeviceSelection | null>
+  }
 }
 
 // ---------------------------------------------------------------------------

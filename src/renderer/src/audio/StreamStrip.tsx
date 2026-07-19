@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../state/store'
 import type { AudioStreamStatus } from '../state/store'
 import { audioEngine } from './engine'
+import { DEFAULT_DEVICE_ID, DEFAULT_DEVICE_LABEL } from './devices'
 
-// One ATC stream's control strip: label, activity light, status chip, and the
-// volume / mute / pan controls. Two indicators are deliberately DISTINCT (see
-// docs/design/Audio.md):
+// One ATC stream's control strip: label, priority rank, activity light, status
+// chip, and the volume / mute / pan / solo / output-device controls. Two
+// indicators are deliberately DISTINCT (see docs/design/Audio.md):
 //   * the activity light answers "is anyone talking?" — driven by the VAD, it
 //     keeps working while the stream is muted, and
 //   * the status chip answers "is this stream healthy?" — connecting / live /
 //     reconnecting·n / error, independent of whether anyone is talking (a live
 //     but silent squelched frequency is normal, never an error).
+//
+// Phase 2b adds solo (a momentary manual override), the priority-rank badge, the
+// per-stream output-device picker, and a dev-only duck-target readout so ducking
+// can be SEEN without being heard.
 
 /** Human text for the status chip. */
 function chipLabel(status: AudioStreamStatus, attempt: number): string {
@@ -28,6 +33,8 @@ function chipLabel(status: AudioStreamStatus, attempt: number): string {
 
 function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
   const stream = useAppStore((s) => s.audioStreams[id])
+  const soloedId = useAppStore((s) => s.audioSolo)
+  const outputs = useAppStore((s) => s.audioOutputs)
 
   // Live countdown to the next retry — ticks only while actually reconnecting,
   // so idle strips never re-render on a timer.
@@ -42,7 +49,23 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
 
   if (!stream) return null
 
-  const { label, status, attempt, active, volume, muted, pan, lastError } = stream
+  const {
+    label,
+    status,
+    attempt,
+    active,
+    volume,
+    muted,
+    pan,
+    priority,
+    lastError,
+    duckTarget,
+    deviceId,
+    deviceNotice
+  } = stream
+
+  const isSoloed = soloedId === id
+  const soloedElsewhere = soloedId !== null && !isSoloed
 
   const countdown = nextRetryAt != null ? Math.max(0, Math.ceil((nextRetryAt - now) / 1000)) : null
 
@@ -61,8 +84,24 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
         : `${base} (attempt ${attempt})`
   }
 
+  // The picker's <select> value must always match one of its options. When the
+  // routed device is the default (or a saved device that isn't present right
+  // now), that value is the default sentinel.
+  const selectedDeviceId = outputs.some((d) => d.deviceId === deviceId)
+    ? deviceId
+    : DEFAULT_DEVICE_ID
+
   return (
-    <div className="stream-strip" data-testid={`stream-strip-${id}`} data-status={status}>
+    <div
+      className="stream-strip"
+      data-testid={`stream-strip-${id}`}
+      data-status={status}
+      data-soloed={isSoloed}
+      data-soloed-elsewhere={soloedElsewhere}
+      // Always present (cheap) so ducking is verifiable from the DOM even in a
+      // production preview; the visible readout below is dev-only.
+      data-duck-target={duckTarget}
+    >
       <div className="stream-strip-top">
         <span
           className="activity-light"
@@ -72,6 +111,13 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
           aria-label={active ? `${label} active` : `${label} idle`}
           title={active ? 'Transmitting' : 'Idle'}
         />
+        <span
+          className="priority-badge"
+          data-testid={`priority-${id}`}
+          title={`Priority rank ${priority} (1 = highest; ducks every lower rank)`}
+        >
+          P{priority}
+        </span>
         <span className="stream-label" title={label}>
           {label}
         </span>
@@ -86,6 +132,22 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
       </div>
 
       <div className="stream-strip-controls">
+        <button
+          type="button"
+          className="solo-btn"
+          data-testid={`solo-${id}`}
+          aria-pressed={isSoloed}
+          aria-label={isSoloed ? `Release solo on ${label}` : `Solo ${label}`}
+          title={
+            isSoloed
+              ? 'Release solo (or press Escape) — restores the prior mix'
+              : 'Solo — hear only this channel (overrides ducking and mute)'
+          }
+          onClick={() => audioEngine.toggleSolo(id)}
+        >
+          Solo
+        </button>
+
         <button
           type="button"
           className="mute-btn"
@@ -130,6 +192,49 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
           />
         </label>
       </div>
+
+      <div className="stream-strip-device">
+        <span className="slider-icon" aria-hidden="true">
+          Out
+        </span>
+        <select
+          className="device-select"
+          data-testid={`device-${id}`}
+          aria-label={`${label} output device`}
+          title="Output device for this channel. Bluetooth outputs lag wired ones by 150–300 ms."
+          value={selectedDeviceId}
+          onChange={(e) => {
+            const nextId = e.currentTarget.value
+            const nextLabel =
+              nextId === DEFAULT_DEVICE_ID
+                ? DEFAULT_DEVICE_LABEL
+                : (outputs.find((d) => d.deviceId === nextId)?.label ?? nextId)
+            void audioEngine.setStreamOutputDevice(id, nextId, nextLabel)
+          }}
+        >
+          <option value={DEFAULT_DEVICE_ID}>{DEFAULT_DEVICE_LABEL}</option>
+          {outputs.map((d) => (
+            <option key={d.deviceId} value={d.deviceId}>
+              {d.label}
+            </option>
+          ))}
+        </select>
+        {import.meta.env.DEV && (
+          <span
+            className="duck-readout"
+            data-testid={`duck-readout-${id}`}
+            title="Current duck-gain target (dev telemetry): 1 = full, ducked = config duckLevel, 0 = silenced by a solo elsewhere."
+          >
+            ×{duckTarget.toFixed(2)}
+          </span>
+        )}
+      </div>
+
+      {deviceNotice && (
+        <p className="device-notice" role="status" data-testid={`device-notice-${id}`}>
+          {deviceNotice}
+        </p>
+      )}
     </div>
   )
 }

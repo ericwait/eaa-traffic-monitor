@@ -1,10 +1,10 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
-import { join } from 'path'
+import { mainEntry, getMainWindow, e2eEnv } from './support'
 
 // Audio-panel smoke for the built app. Proves the ATC Audio pillar mounts, the
 // eight curated streams render as strips with their default labels, each carries
-// a status chip, and the mute toggle flips.
+// a status chip and a priority-rank badge, and the mute + solo toggles flip.
 //
 // CRITICAL: this spec must NEVER depend on LiveATC being reachable — CI is a
 // network-restricted Linux box. We launch with AUDIO_E2E=1 (short reconnect
@@ -15,9 +15,6 @@ import { join } from 'path'
 //
 // Prerequisite: `electron-vite build` must have run (out/main + out/renderer).
 // `just e2e` builds first.
-
-const projectRoot = join(__dirname, '..', '..')
-const mainEntry = join(projectRoot, 'out', 'main', 'index.js')
 
 /** The curated KOSH defaults (see src/shared/defaultConfig.ts): id -> label. */
 const DEFAULT_STREAMS: ReadonlyArray<readonly [string, string]> = [
@@ -36,31 +33,10 @@ const VALID_CHIP_STATES = new Set(['connecting', 'live', 'reconnecting', 'error'
 let app: ElectronApplication
 let page: Page
 
-// The app has two webContents (the app:// renderer and the FR24 view); select
-// the main renderer explicitly by its app:// URL, not by creation order.
-async function getMainWindow(electronApp: ElectronApplication): Promise<Page> {
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    const main = electronApp.windows().find((p) => p.url().startsWith('app://'))
-    if (main) return main
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  throw new Error('e2e: the main app:// renderer window never appeared')
-}
-
 test.beforeAll(async () => {
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key === 'ELECTRON_RUN_AS_NODE' || key === 'ELECTRON_RENDERER_URL') continue
-    if (value !== undefined) env[key] = value
-  }
-  env.NODE_ENV = 'production'
-  env.FR24_URL_OVERRIDE = 'about:blank'
   // Short backoff + no audible autoplay so the smoke never waits on a network
   // or a user gesture.
-  env.AUDIO_E2E = '1'
-
-  app = await electron.launch({ args: [mainEntry], env })
+  app = await electron.launch({ args: [mainEntry], env: e2eEnv({ AUDIO_E2E: '1' }) })
   await app.firstWindow()
   page = await getMainWindow(app)
   await page.waitForLoadState('domcontentloaded')
@@ -104,4 +80,44 @@ test('the mute toggle flips its pressed state', async () => {
   await mute.click()
   const expected = before === 'true' ? 'false' : 'true'
   await expect(mute).toHaveAttribute('aria-pressed', expected)
+})
+
+test('every strip shows its priority rank badge (P1..P8)', async () => {
+  // Priorities come from config: Guard is P1 (highest), ATIS is P8 (lowest).
+  await expect(page.getByTestId('priority-guard')).toHaveText('P1')
+  await expect(page.getByTestId('priority-atis')).toHaveText('P8')
+  for (const [id] of DEFAULT_STREAMS) {
+    await expect(page.getByTestId(`priority-${id}`)).toBeVisible()
+  }
+})
+
+test('every strip carries a duck-target data attribute, ungated at full (1)', async () => {
+  // With no priority stream forcing a duck (and no solo held), every stream's
+  // duck target rides at 1 — verifiable from the DOM without any audio.
+  for (const [id] of DEFAULT_STREAMS) {
+    await expect(page.getByTestId(`stream-strip-${id}`)).toHaveAttribute('data-duck-target', '1')
+  }
+})
+
+test('the solo toggle flips its pressed state and marks the strip soloed', async () => {
+  const solo = page.getByTestId('solo-tower')
+  await expect(solo).toHaveAttribute('aria-pressed', 'false')
+  await solo.click()
+  await expect(solo).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('stream-strip-tower')).toHaveAttribute('data-soloed', 'true')
+  // A different strip is silenced by the solo (duck target driven to 0).
+  await expect(page.getByTestId('stream-strip-fisk')).toHaveAttribute('data-duck-target', '0')
+  // Clicking again releases; the mix returns to full.
+  await solo.click()
+  await expect(solo).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByTestId('stream-strip-fisk')).toHaveAttribute('data-duck-target', '1')
+})
+
+test('every strip has an output-device picker defaulting to System default', async () => {
+  for (const [id] of DEFAULT_STREAMS) {
+    const picker = page.getByTestId(`device-${id}`)
+    await expect(picker).toBeVisible()
+    // The synthetic default option is always present and selected initially.
+    await expect(picker.locator('option').first()).toHaveText('System default')
+  }
 })
