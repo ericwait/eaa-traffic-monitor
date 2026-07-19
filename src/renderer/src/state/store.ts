@@ -27,13 +27,55 @@ export interface AppState {
   overlayOpen: boolean
   setNavState: (navState: Fr24NavState) => void
   setOverlayOpen: (overlayOpen: boolean) => void
+
+  // --- Audio slice (Phase 2a) ---------------------------------------------
+  /** Per-stream UI state, keyed by stream id (see AudioStreamUi). */
+  audioStreams: Record<string, AudioStreamUi>
+  /** Stream ids in display order (config order). */
+  audioOrder: string[]
+  /**
+   * Config fallback banner: set when config.json was invalid and the app fell
+   * back to compiled defaults. Names the file and the validation error.
+   */
+  audioBanner: AudioBanner | null
+  /**
+   * True while any stream's AudioContext is autoplay-suspended — the panel shows
+   * a "click to enable audio" hint until the first user gesture unlocks it.
+   */
+  audioNeedsGesture: boolean
+  /** Replace the whole stream set (engine build / rebuild). */
+  initAudioStreams: (streams: AudioStreamUi[]) => void
+  /** Shallow-merge a patch into one stream's UI state. */
+  patchAudioStream: (id: string, patch: Partial<AudioStreamUi>) => void
+  /** Set or clear the config fallback banner. */
+  setAudioBanner: (banner: AudioBanner | null) => void
+  /** Set the autoplay-gesture hint flag. */
+  setAudioNeedsGesture: (needsGesture: boolean) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   navState: INITIAL_NAV_STATE,
   overlayOpen: false,
   setNavState: (navState) => set({ navState }),
-  setOverlayOpen: (overlayOpen) => set({ overlayOpen })
+  setOverlayOpen: (overlayOpen) => set({ overlayOpen }),
+
+  audioStreams: {},
+  audioOrder: [],
+  audioBanner: null,
+  audioNeedsGesture: false,
+  initAudioStreams: (streams) =>
+    set({
+      audioStreams: Object.fromEntries(streams.map((s) => [s.id, s])),
+      audioOrder: streams.map((s) => s.id)
+    }),
+  patchAudioStream: (id, patch) =>
+    set((state) => {
+      const current = state.audioStreams[id]
+      if (!current) return state
+      return { audioStreams: { ...state.audioStreams, [id]: { ...current, ...patch } } }
+    }),
+  setAudioBanner: (audioBanner) => set({ audioBanner }),
+  setAudioNeedsGesture: (audioNeedsGesture) => set({ audioNeedsGesture })
 }))
 
 /**
@@ -43,3 +85,44 @@ export const useAppStore = create<AppState>((set) => ({
  * write (and re-render) on every pointer move during a drag.
  */
 export const FR24_RELAYOUT_EVENT = 'fr24-relayout'
+
+// ---------------------------------------------------------------------------
+// Audio slice types (Phase 2a). The engine (a plain-TS singleton) writes these;
+// React subscribes via selectors. Only the post-hysteresis `active` boolean and
+// status changes flow through here — the high-frequency dBFS levels stay inside
+// the engine, never triggering a store write or re-render.
+// ---------------------------------------------------------------------------
+
+/** The connection-health chip states — distinct from the activity light. */
+export type AudioStreamStatus = 'connecting' | 'live' | 'reconnecting' | 'error'
+
+/** One ATC stream's live UI state. */
+export interface AudioStreamUi {
+  id: string
+  label: string
+  /** Connection health (the status chip). NOT the activity light. */
+  status: AudioStreamStatus
+  /** Reconnect attempt count, shown as reconnecting·n. */
+  attempt: number
+  /** Post-hysteresis voice activity (the activity light). Works while muted. */
+  active: boolean
+  /** Slider volume 0..1, remembered across a mute. */
+  volume: number
+  muted: boolean
+  /** Stereo pan -1..1. */
+  pan: number
+  /** Priority rank (1 = highest); drives Phase 2b ordering/ducking. */
+  priority: number
+  /** Last failure message, for the chip tooltip. */
+  lastError: string | null
+  /** Epoch ms of the next reconnect attempt, for the countdown tooltip. */
+  nextRetryAt: number | null
+}
+
+/** The config fallback banner payload. */
+export interface AudioBanner {
+  /** The zod validation / parse error text. */
+  message: string
+  /** Absolute path to config.json, so the operator knows which file to fix. */
+  filePath: string
+}
