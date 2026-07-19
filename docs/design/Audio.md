@@ -68,7 +68,8 @@ Their causes are recorded below and in [Video.md](Video.md) and [Tracking.md](Tr
 - **Priority ranks with auto-ducking.**
   Every channel has a priority rank.
   A channel ducks only when a channel of *strictly higher* priority is active — equal ranks never duck each other.
-  When it ducks, it drops to −12 dB, with a fast duck and a slow release, so a priority call's opening syllables aren't buried under a channel still fading down, and a channel coming back up doesn't pump (decision 2026-07-18).
+  A **muted** higher-priority channel does not duck the channels below it (decision 2026-07-19): its activity light still shows it talking, but because the operator has taken it out of their ears, ducking the channels they *are* listening to on its behalf would drop the mix to silence for a voice no one can hear.
+  When a channel ducks, it drops to −12 dB, with a fast duck and a slow release, so a priority call's opening syllables aren't buried under a channel still fading down, and a channel coming back up doesn't pump (decision 2026-07-18).
   The result: Tower talks and Fisk quietly steps back within a fraction of a second, then eases back to full on its own.
 - **One-click solo.**
   Solo overrides everything — priorities, ducking, and mutes — collapsing the mix to a single channel instantly, and releasing back to the prior state just as fast.

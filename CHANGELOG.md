@@ -30,6 +30,20 @@ All notable changes to this project are documented in this file.
 - A "Reload config" button applies edits to `config.json` live; an invalid file
   falls back to the built-in defaults and shows a banner naming the file and the
   error rather than failing to start.
+- Priority auto-ducking: a channel drops to −12 dB whenever a channel of
+  strictly higher priority is transmitting (equal ranks never duck each other),
+  with a fast duck and a slow release so the mix doesn't pump. A muted channel's
+  activity light still works, but a muted channel never ducks the channels you
+  are actually listening to.
+- One-click solo per channel — collapses the mix to that single channel,
+  overriding ducking and mute; click again or press Escape to release.
+- Per-channel output-device routing (for example Tower on headphones while the
+  rest play on the desk speakers), remembered across relaunch and re-matched by
+  device name after a replug; a routed device that disappears falls back to the
+  system default with a per-channel notice. Bluetooth outputs lag wired ones by
+  150–300 ms (noted in the picker tooltip).
+- A priority-rank badge on each channel strip, and a dev-mode duck-gain readout
+  so ducking can be seen while tuning, not only heard.
 - Live Video panel: a YouTube grid tiling the curated EAA cams (Warbirds,
   Ultralights, Seaplane Base, Green Dot, Vintage, Boeing Plaza, and the
   opening-weekend featured stream), in a uniform grid or an emphasized
@@ -71,7 +85,17 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- The packaged app now serves its window from a loopback HTTP server on
+  `127.0.0.1` instead of the `app://` custom scheme; `app://` remains as an
+  automatic fallback. This is what lets the YouTube grid work in packaged builds
+  (see Fixed).
+
 ### Fixed
+
+- YouTube tiles now play in packaged builds. The YouTube IFrame API rejected the
+  `app://` origin with error 153, so the grid was blank in a packaged build and
+  only worked from the dev server; serving the packaged renderer over a loopback
+  HTTP origin resolves it.
 
 ### Deprecated
 

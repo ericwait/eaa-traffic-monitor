@@ -70,6 +70,12 @@ It's the third that rules out a plain web app outright, and once a desktop shell
 - **YouTube audio is volume/mute only.**
   The IFrame Player owns its media element across an origin boundary; it can't be handed to the Web Audio graph for analysis, and it can't be routed to a specific output device with `setSinkId`.
   Every YouTube tile plays through the OS default output device — a hard cross-origin limitation, not a missing feature.
+- **The packaged renderer is served over a loopback HTTP origin, not a custom scheme (decision 2026-07-19).**
+  The YouTube IFrame Player API validates the origin embedding its player and rejects the `app://` custom scheme with error 153 — verified in Phase 3, where the grid loaded from the electron-vite dev server but went blank from a packaged `app://` build.
+  The fix is a tiny loopback HTTP server bound to `127.0.0.1` on an ephemeral port, serving the built renderer from `out/renderer` (`src/main/rendererServer.ts`); the main window loads `http://127.0.0.1:<port>/index.html` instead of `app://`.
+  A `127.0.0.1` origin is still a secure context, so `enumerateDevices`/`setSinkId` and the postMessage handshakes keep working, and nothing is exposed off-host.
+  The `app://` scheme stays registered as a logged, degraded fallback used only if the loopback socket fails to bind (YouTube tiles are then blank, but audio and FR24 are unaffected).
+  This supersedes the earlier plan to serve the packaged renderer from `app://`; the once-blank-in-packaged-builds YouTube grid now plays.
 - **The FR24 panel paints above all DOM (z-order law).**
   `WebContentsView` composites above the page, not inside it — an HTML modal or overlay cannot cover it.
   Anything that needs to appear over the FR24 region must call `fr24:setVisible(false)` first; anything transient over it should use native Electron menus instead of DOM overlays.

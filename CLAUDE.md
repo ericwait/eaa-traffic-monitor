@@ -42,7 +42,7 @@ Run `just lint`, `just typecheck`, `just fmt`, and `just test` clean before ever
 
 ## Key gotchas (each is an instruction)
 
-- **Packaged renderer loads from `app://`, never `file://`.** The YouTube IFrame postMessage handshake and prod `enumerateDevices`/`setSinkId` need a secure, non-file origin. Dev uses the electron-vite dev server; everything else uses `app://` (see `src/main/`).
+- **Packaged renderer loads from a loopback HTTP server (`http://127.0.0.1:<port>`), never `file://` — with `app://` as a logged fallback.** The YouTube IFrame API validates the embedding origin and rejects `app://` with error 153 (verified Phase 3), so the packaged renderer is served from a tiny 127.0.0.1 http server (`src/main/rendererServer.ts`); a real http origin also stays a secure context for `enumerateDevices`/`setSinkId`. Dev uses the electron-vite dev server; if the loopback bind fails the app falls back to the still-registered `app://` scheme and logs that YouTube tiles will be blank (decision 2026-07-19; see `src/main/index.ts`).
 - **LiveATC rejects non-browser user agents.** Every `.pls` resolve and stream fetch from the main process must send a browser-like `User-Agent`, and resolved URLs must be cached (resolve only on connect/reconnect) — never hammer with a bare/bot UA.
 - **ATC mute is a gain node set to 0, never `element.muted`.** Activity lights must keep working on muted streams; muting the element kills the signal the analyser reads.
 - **The VAD analyser taps PRE-gain.** Tapping post-duck creates a measurement feedback loop and oscillating ducking. Put the analyser parallel off the source, before the gain chain.
