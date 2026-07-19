@@ -98,6 +98,10 @@ It's the third that rules out a plain web app outright, and once a desktop shell
 - **LiveATC blocks non-browser user agents.**
   Every `.pls` resolve and stream fetch from the main process must send a browser-like `User-Agent`; a bare or bot UA is refused outright.
   Handled today in `plsResolver.ts`, but it constrains any future code path touching LiveATC — it can never be a plain server-side fetch with default headers.
+- **Field weather is sourced from a free, keyless NOAA aviation-weather data API (decision 2026-07-19).**
+  Current conditions and a short-range forecast for the tracked airfield (see [../design/Weather.md](../design/Weather.md)) are fetched from `aviationweather.gov`'s Data API — `GET /api/data/metar?ids=<station>&format=json` and `GET /api/data/taf?ids=<station>&format=json` — a public US-government service that needs no API key and publishes no rate limit.
+  Unlike LiveATC, this API expects programmatic callers rather than browsers, so "polite client" here means a descriptive User-Agent (app name, version, and a link to this repository) instead of browser impersonation, fetched only from the main process (`src/main/weather.ts`) and cached; polling never runs more often than every 5 minutes, 10 by default (`config.weather.pollMinutes`).
+  The API's own decoded flight-category field is deliberately not trusted — the app re-derives VFR/MVFR/IFR/LIFR from ceiling and visibility itself (`src/shared/weather.ts`), so the category logic stays unit-testable and independent of this one source's own decoding.
 
 ## Alternatives considered
 

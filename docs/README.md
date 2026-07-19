@@ -16,6 +16,7 @@ If a sentence in `design/` names a language, library, or tool beyond a brief par
 | [design/Audio.md](design/Audio.md) | All sound sources: ATC streams, video audio, tracker audio | Audio behavior and its boundaries |
 | [design/Video.md](design/Video.md) | Live webcam grid, layouts, pop-outs | Video behavior |
 | [design/Tracking.md](design/Tracking.md) | Embedded flight-tracking panel | Tracking behavior |
+| [design/Weather.md](design/Weather.md) | Field-weather card: current conditions, forecast, flight category | Weather behavior |
 | [design/assets/](design/assets/) | Prototype screenshots (the baseline this app replaces) | — |
 | [development/TechStack.md](development/TechStack.md) | Stack, rationale, limitations, alternatives | Tool choices |
 | [Implementation-Plan.md](Implementation-Plan.md) | Forward work only: phases, dependency graph, backlog, progress log | What happens next |
