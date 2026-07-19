@@ -32,6 +32,17 @@
       content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app: https://www.youtube.com; frame-src 'self' app: https://www.youtube.com; media-src 'self' https://*.liveatc.net"
     />
     <meta name="referrer" content="unsafe-url" />
+    <!--
+      Wyvern Watch favicons. The files live in src/renderer/public/ and are
+      copied verbatim to the renderer output root by electron-vite, so the
+      root-absolute hrefs resolve identically under all three load paths: the
+      dev server, the packaged loopback http server, and the app:// fallback
+      (each maps a leading-slash path to the renderer root). Covered by the
+      existing CSP img-src 'self'. See design/brand/DESIGN-LANGUAGE.md.
+    -->
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180.png" />
     <title>Airshow Traffic Monitor</title>
   </head>
   <body>
