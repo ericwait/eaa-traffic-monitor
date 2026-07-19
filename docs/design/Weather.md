@@ -1,4 +1,4 @@
-> Status: draft | Audience: anyone designing or building the field-weather card | See also: [Audio.md](Audio.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md), [../../README.md](../../README.md)
+> Status: draft | Audience: anyone designing or building the field-weather card | See also: [Audio.md](Audio.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md), [README.md](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md)
 
 # Field Weather
 

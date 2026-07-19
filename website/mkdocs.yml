@@ -18,7 +18,7 @@ site_name: Airshow Traffic Monitor
 site_description: >-
   One desktop dashboard for monitoring airshow air traffic — simultaneous ATC
   audio, a YouTube live-feed grid, and an embedded FlightRadar24 panel.
-site_url: https://ericwait.github.io/airshow-traffic-monitor/
+site_url: https://wyvernwatch.org/
 site_author: Eric Wait
 
 # Source-of-truth content tree. Relative to THIS file (website/), so ../docs is
@@ -104,6 +104,7 @@ nav:
       - Audio: design/Audio.md
       - Video: design/Video.md
       - Tracking: design/Tracking.md
+      - Weather: design/Weather.md
   - Development:
       - Tech stack: development/TechStack.md
       - Getting started: development/Getting-Started.md
