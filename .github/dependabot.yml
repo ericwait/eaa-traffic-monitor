@@ -29,3 +29,16 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+    ignore:
+      # electron-vite 5 co-resolves with Vite 7, not Vite 8 — revisit post-show.
+      - dependency-name: 'vite'
+        update-types: ['version-update:semver-major']
+      # Companion package for Vite 8 (Oxc-based transform); blocked with vite above — revisit post-show.
+      - dependency-name: '@vitejs/plugin-react'
+        update-types: ['version-update:semver-major']
+      # TypeScript 7.x is the Go-port rewrite; this project deliberately pins classic TS — revisit post-show.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      # @types/node should track the Node version actually in use (CI: 22), not the latest major — revisit post-show.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
