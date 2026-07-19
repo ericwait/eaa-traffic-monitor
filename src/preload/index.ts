@@ -8,7 +8,8 @@ import type {
   Fr24NavState,
   ResolveStreamResult,
   SessionPatch,
-  SessionState
+  SessionState,
+  WeatherResult
 } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
 
@@ -51,6 +52,18 @@ const api: AppApi = {
       ipcRenderer.invoke(IpcChannels.audioResolveStream, streamId, opts),
     // Static flag read once from the launch env — see AudioApi.isE2E.
     isE2E: process.env.AUDIO_E2E === '1'
+  },
+  weather: {
+    get: (): Promise<WeatherResult> => ipcRenderer.invoke(IpcChannels.weatherGet),
+    refresh: (): Promise<WeatherResult> => ipcRenderer.invoke(IpcChannels.weatherRefresh),
+    onUpdate: (listener: (result: WeatherResult) => void): (() => void) => {
+      // Same wrap-and-unsubscribe shape as fr24.onNavState — never leaks
+      // Electron's event object, and a StrictMode/HMR re-mount can't stack
+      // duplicate listeners.
+      const handler = (_event: unknown, result: WeatherResult): void => listener(result)
+      ipcRenderer.on(IpcChannels.weatherUpdate, handler)
+      return () => ipcRenderer.removeListener(IpcChannels.weatherUpdate, handler)
+    }
   }
 }
 

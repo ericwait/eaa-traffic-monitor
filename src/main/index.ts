@@ -6,6 +6,7 @@ import { startRendererServer } from './rendererServer'
 import type { RendererServer } from './rendererServer'
 import { Fr24Controller } from './fr24'
 import { registerIpc } from './ipc'
+import { WeatherPoller } from './weatherPoller'
 
 // ---------------------------------------------------------------------------
 // Privileged custom scheme registration.
@@ -26,6 +27,7 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow: BrowserWindow | null = null
 let fr24: Fr24Controller | null = null
+let weatherPoller: WeatherPoller | null = null
 let disposeIpc: (() => void) | null = null
 // The loopback renderer server (Phase 2b, decision 2026-07-19). Started once and
 // reused across window (re)creation; closed on quit.
@@ -99,7 +101,9 @@ function createWindow(): void {
   // bound to the window's (see Fr24Controller.dispose on close, below).
   fr24 = new Fr24Controller(mainWindow)
   fr24.attach()
-  disposeIpc = registerIpc(fr24)
+  weatherPoller = new WeatherPoller(mainWindow)
+  weatherPoller.start()
+  disposeIpc = registerIpc(fr24, weatherPoller)
 
   // A late-subscribing or reloaded renderer (HMR) misses the FR24 nav events
   // that already fired; re-push current nav state once the renderer finishes
@@ -115,6 +119,8 @@ function createWindow(): void {
     disposeIpc = null
     fr24?.dispose()
     fr24 = null
+    weatherPoller?.stop()
+    weatherPoller = null
   })
 
   mainWindow.on('closed', () => {

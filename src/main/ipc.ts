@@ -1,10 +1,18 @@
 import { ipcMain } from 'electron'
-import type { Fr24Bounds, Fr24NavAction, ResolveStreamResult, SessionPatch } from '@shared/ipc'
+import type {
+  Fr24Bounds,
+  Fr24NavAction,
+  ResolveStreamResult,
+  SessionPatch,
+  WeatherResult
+} from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
 import type { Fr24Controller } from './fr24'
 import { getSessionState, patchSessionState } from './session'
 import { getConfig, reloadConfig } from './config'
 import { clearResolveCache, resolveStream } from './plsResolver'
+import { clearWeatherCache, getWeather, refreshWeather } from './weather'
+import type { WeatherPoller } from './weatherPoller'
 
 // Main-side IPC registration for Phase 1: the FR24 view channels plus the
 // minimal session get/patch. Hand-rolled against the shared contract — one
@@ -29,7 +37,7 @@ function isBounds(value: unknown): value is Fr24Bounds {
  * disposer that removes the handlers again (so a window re-create never stacks
  * duplicate listeners).
  */
-export function registerIpc(fr24: Fr24Controller): () => void {
+export function registerIpc(fr24: Fr24Controller, weatherPoller: WeatherPoller): () => void {
   ipcMain.on(IpcChannels.fr24SetBounds, (_e, bounds: unknown) => {
     if (!isBounds(bounds)) {
       console.warn('[ipc] fr24:setBounds ignored — malformed bounds payload:', bounds)
@@ -75,6 +83,10 @@ export function registerIpc(fr24: Fr24Controller): () => void {
   ipcMain.handle(IpcChannels.configReload, () => {
     const result = reloadConfig()
     clearResolveCache()
+    // The reloaded file may name a different station or poll cadence — drop
+    // the stale-station cache and restart the poll timer at the new interval.
+    clearWeatherCache()
+    weatherPoller.start()
     return result
   })
 
@@ -111,6 +123,39 @@ export function registerIpc(fr24: Fr24Controller): () => void {
     }
   )
 
+  // --- Weather (field METAR/TAF) ------------------------------------------
+  // getWeather/refreshWeather are written not to throw, but the same
+  // defensive catch as audioResolveStream applies — IPC must never reject.
+  ipcMain.handle(IpcChannels.weatherGet, async (): Promise<WeatherResult> => {
+    try {
+      return await getWeather()
+    } catch (err: unknown) {
+      return {
+        ok: false,
+        kind: 'unknown',
+        error: `unexpected error reading field weather: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        stale: null
+      }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.weatherRefresh, async (): Promise<WeatherResult> => {
+    try {
+      return await refreshWeather()
+    } catch (err: unknown) {
+      return {
+        ok: false,
+        kind: 'unknown',
+        error: `unexpected error refreshing field weather: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        stale: null
+      }
+    }
+  })
+
   return () => {
     ipcMain.removeAllListeners(IpcChannels.fr24SetBounds)
     ipcMain.removeAllListeners(IpcChannels.fr24Nav)
@@ -120,5 +165,7 @@ export function registerIpc(fr24: Fr24Controller): () => void {
     ipcMain.removeHandler(IpcChannels.configGet)
     ipcMain.removeHandler(IpcChannels.configReload)
     ipcMain.removeHandler(IpcChannels.audioResolveStream)
+    ipcMain.removeHandler(IpcChannels.weatherGet)
+    ipcMain.removeHandler(IpcChannels.weatherRefresh)
   }
 }
