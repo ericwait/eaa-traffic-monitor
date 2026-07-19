@@ -19,7 +19,10 @@ export default tseslint.config(
       '**/out/**',
       '**/.playwright/**',
       'website/site/**',
-      'website/.venv/**'
+      'website/.venv/**',
+      // Per-agent git worktrees dropped by Claude Code during multi-agent
+      // sessions — separate checkouts that run their own lint.
+      '**/.claude/worktrees/**'
     ]
   },
   {

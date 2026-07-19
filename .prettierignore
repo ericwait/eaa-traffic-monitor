@@ -20,3 +20,6 @@ design
 # Pre-existing GitHub community templates authored to their own conventions.
 .github/ISSUE_TEMPLATE
 
+
+# Agent worktrees are separate checkouts (each runs its own formatter).
+.claude/worktrees/

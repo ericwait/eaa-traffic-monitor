@@ -1,4 +1,4 @@
-> Status: Phase 4 and Phase 5 remaining — Monday-checkpoint scope shipped 2026-07-19 | Audience: contributors and agents planning next work | See also: [docs index](README.md), [Audio design](design/Audio.md), [Video design](design/Video.md), [Tracking design](design/Tracking.md), [Tech stack](development/TechStack.md)
+> Status: Phases 4, 5, and 6 remaining — Monday-checkpoint scope shipped 2026-07-19 | Audience: contributors and agents planning next work | See also: [docs index](README.md), [Audio design](design/Audio.md), [Video design](design/Video.md), [Tracking design](design/Tracking.md), [Tech stack](development/TechStack.md)
 
 <!--
 PLAN-DOC LIFECYCLE — read before editing.
@@ -23,6 +23,7 @@ This sprint runs agent-assisted parallel tracks once the walking skeleton lands,
 - **Audio track** — Phase 2a → Phase 2b (the core value).
 - **Video track** — Phase 3 → Phase 4.
 - **Release track** — Phase 5 (pipeline plumbing, parallel to the feature tracks once Phase 0 is done).
+- **Brand track** — Phase 6 (visual identity; parallel to the other tracks once the trunk landed).
 
 The compressed calendar (Sat Jul 18 → Wed Jul 22) is only reachable because the tracks run concurrently with AI-agent assistance; every effort estimate below assumes **solo dev + AI agents**.
 
@@ -40,13 +41,16 @@ flowchart TD
     BASE(["Shipped baseline — Phases 0, 1, 2a, 2b, 3"])
     P4["Phase 4 — Pop-outs + restore"]
     P5["Phase 5 — Release pipeline"]
+    P6["Phase 6 — Brand application"]
 
     ALPHA(["Milestone: Alpha release v0.1.0"])
 
     BASE --> P4
     BASE --> P5
+    BASE --> P6
     P4 --> ALPHA
     P5 --> ALPHA
+    P6 -. icon slice preferred before the tag .-> ALPHA
 
     classDef milestone fill:#fef3c7,stroke:#d97706,color:#7c2d12
     classDef shipped fill:#dcfce7,stroke:#16a34a,color:#14532d
@@ -102,9 +106,48 @@ Within the phase, the docs site cuts to post-show without affecting installers (
 **Dominant risk.** Headless e2e on Linux CI; mitigated by `xvfb-run` and keeping e2e at launch-smoke scope during the sprint.
 See [development/TechStack.md](development/TechStack.md).
 
+## Phase 6 — Brand application
+
+**Goal.** Apply the Wyvern Watch visual language everywhere the app shows identity:
+OS-level icons (dock, taskbar, launcher, installer), in-app theming from the semantic tokens, and the mark in the header and About dialog.
+Every asset already exists under [design/brand/](../design/brand/) — this phase wires them in; it draws nothing new.
+
+**Scope.**
+
+- Packaging icons: wire electron-builder to the shipped masters
+  (`design/brand/png/app-icon-ember-1024.png` for macOS/Linux, `design/brand/ico/favicon.ico` for Windows) per the packaging note in the design language doc,
+  generating a true multi-resolution `.icns` from the 1024 master.
+  Icon binaries stay on their existing LFS routes.
+- Renderer favicon and window identity from the shipped favicon set (`src/renderer/index.html`).
+- Token adoption: import `tokens.css` and migrate renderer stylesheets from hard-coded hexes to the semantic `--color-*` variables;
+  Ember is the shipped dark look, and Cream Classic comes along free via the adaptive tokens.
+- Typography: adopt the three stacks from the design language (display, body, mono with tabular figures for callsigns/frequencies) with system-sans fallbacks;
+  whether to bundle the font files is a decision inside the phase.
+- The mark in-app: the adaptive `icon.svg` beside the header title and in the About modal
+  (`icon-mono.svg` where a single tint is needed).
+- Docs-site identity: favicon and the social/OG images wired into the site config once Phase 5's site machinery lands.
+
+**Depends on.** The shipped baseline; nothing in Phases 4 or 5 blocks it.
+The docs-site identity item touches Phase 5's `website/` machinery, so that one item lands after Phase 5 merges.
+
+**Exit criterion.** A packaged build shows the Wyvern Watch icon in the macOS dock, Windows taskbar, and Linux launcher;
+the header and About dialog show the mark;
+renderer chrome colors come from `tokens.css` variables rather than hard-coded hexes, and flipping the OS theme swaps Ember/Cream automatically.
+
+**Estimated effort.** ~0.5 day.
+Solo dev + AI agents.
+
+**Cut-line notes.** Scheduled after the smaller post-alpha fixes;
+the packaging-icon slice is small and is preferred before the `v0.1.0` tag so the alpha installers carry the mark instead of the stock Electron icon.
+
+**Dominant risk.** Token migration touches every renderer stylesheet (medium likelihood, low impact);
+mitigated by migrating panel-by-panel against `brand-preview.html` as the visual reference.
+
 ## Milestone — Alpha release (v0.1.0)
 
-**After Phase 5, once every phase exit criterion above is checked.** Observable: tag `v0.1.0` publishes unsigned macOS / Windows / Linux installers to a public GitHub Release.
+**After Phases 4 and 5, once their exit criteria above are checked.**
+Phase 6 does not gate the milestone, except that its packaging-icon slice is preferred before the tag (see its cut-line notes).
+Observable: tag `v0.1.0` publishes unsigned macOS / Windows / Linux installers to a public GitHub Release.
 Depends on Phase 4 (feature-complete alpha) and Phase 5 (the pipeline).
 Distinct from the Monday checkpoint — that was a real-use gate, already cleared; this is the published artifact.
 

@@ -53,3 +53,7 @@ website/site/
 # Real data never enters git. Exports, dumps, and fixtures derived from a live
 # session belong on disk only.
 data/
+
+# --- Agent scratch -----------------------------------------------------------
+# Claude Code drops per-agent git worktrees here during multi-agent sessions.
+.claude/worktrees/
