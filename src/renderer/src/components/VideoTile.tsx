@@ -66,6 +66,16 @@ function VideoTile({
   const [volume, setVolume] = useState(100)
   // Players start muted (playerVars.mute: 1) so autoplay is guaranteed.
   const [muted, setMuted] = useState(true)
+  // Tracked in state rather than via the CSS `:hover` pseudo-class. Real
+  // continuous mouse movement (any human) does keep `.video-tile:hover`
+  // matched fine even over the live cross-origin iframe — verified live. The
+  // one case that misbehaves is a synthetic, single-jump pointer move landing
+  // directly on the iframe's rendered surface with no prior position on the
+  // page (exactly what automated-testing tools do for a `.hover()`/`.click()`
+  // call): `:hover` can fail to propagate to `.video-tile` then. mouseenter/
+  // mouseleave fire correctly either way, so driving visibility from them
+  // sidesteps the gap without depending on how the pointer got there.
+  const [isHovering, setIsHovering] = useState(false)
 
   useEffect(() => {
     const host = playerHostRef.current
@@ -121,7 +131,8 @@ function VideoTile({
       className={[
         'video-tile',
         emphasized ? 'video-tile--emphasized' : '',
-        filled ? 'video-tile--filled' : ''
+        filled ? 'video-tile--filled' : '',
+        isHovering ? 'video-tile--hovering' : ''
       ]
         .filter(Boolean)
         .join(' ')}
@@ -130,6 +141,8 @@ function VideoTile({
       data-feed-id={feed.id}
       data-status={status}
       onDoubleClick={handleDoubleClick}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
     >
       <div className="video-tile-player" ref={playerHostRef} />
 

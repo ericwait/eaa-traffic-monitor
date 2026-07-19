@@ -9,11 +9,19 @@
       covers our own bundle. Later phases relax specific directives as the
       YouTube IFrame API (youtube.com frames) and FR24 WebContentsView needs
       land — do that deliberately, per-source, never with a blanket wildcard.
+
+      Phase 3: the YouTube grid needs exactly two additions, both scoped to
+      youtube.com specifically (never a wildcard) — script-src for the
+      https://www.youtube.com/iframe_api loader tag, and frame-src (not
+      previously declared, so it fell back to default-src) for the actual
+      <iframe> YT.Player inserts. FR24 needs no CSP relaxation: it is a
+      main-process WebContentsView, not a renderer-loaded frame.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app:"
+      content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app: https://www.youtube.com; frame-src 'self' app: https://www.youtube.com"
     />
+    <meta name="referrer" content="unsafe-url" />
     <title>EAA Traffic Monitor</title>
   </head>
   <body>

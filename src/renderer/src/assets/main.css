@@ -411,6 +411,14 @@ body {
   border-radius: 6px;
   background: #05070a;
   border: 1px solid var(--line);
+  /* Establishes a proper stacking context for this tile, so the identity
+     overlay and hover controls z-index cleanly above the embedded YouTube
+     iframe rather than depending on default paint order against a cross-origin
+     frame's separately-composited surface. Defensive: the actual bug found in
+     live testing (mute button unreachable) traced to hover-state handling —
+     see VideoTile.tsx and the .video-tile-controls comment below — but correct
+     stacking against an overlaid iframe is worth keeping explicit regardless. */
+  isolation: isolate;
 }
 
 .video-tile--emphasized {
@@ -477,6 +485,7 @@ body {
   left: 0;
   right: 0;
   z-index: 2;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -523,6 +532,7 @@ body {
   right: 0;
   bottom: 0;
   z-index: 2;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -533,7 +543,14 @@ body {
   transition: opacity 0.12s ease;
 }
 
-.video-tile:hover .video-tile-controls,
+/* Driven by VideoTile.tsx's onMouseEnter/onMouseLeave state, NOT the :hover
+   pseudo-class — see the comment there: a synthetic single-jump pointer move
+   straight onto the live iframe (what automated test tools do) can leave
+   `:hover` unmatched on this ancestor even though real, continuous mouse
+   movement matches it fine. mouseenter/mouseleave aren't sensitive to that,
+   so this sidesteps the gap either way. :focus-within stays for keyboard
+   navigation. */
+.video-tile.video-tile--hovering .video-tile-controls,
 .video-tile:focus-within .video-tile-controls {
   opacity: 1;
   pointer-events: auto;
