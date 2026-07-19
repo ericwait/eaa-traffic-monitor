@@ -10,7 +10,15 @@ import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
 // tracked gap-free to a resizable DOM region, the foundational layout risk this
 // phase de-risks.
 
-function LayoutShell(): React.JSX.Element {
+// The ATC (left) panel content is injected as a slot so the audio pillar can be
+// composed in from App without this shell importing it — keeps the audio and
+// video tracks' edits to disjoint regions of this file. Defaults to the Phase 1
+// placeholder when no slot is provided.
+interface LayoutShellProps {
+  atcSlot?: React.ReactNode
+}
+
+function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
   const setNavState = useAppStore((s) => s.setNavState)
   const overlayOpen = useAppStore((s) => s.overlayOpen)
   const setOverlayOpen = useAppStore((s) => s.setOverlayOpen)
@@ -52,17 +60,19 @@ function LayoutShell(): React.JSX.Element {
       <div className="app-body">
         <Group orientation="horizontal" className="layout-group" onLayoutChange={emitRelayout}>
           <Panel id="atc" className="panel atc-panel" defaultSize="22" minSize="14">
-            <section className="placeholder" aria-label="ATC Audio">
-              <header className="panel-head">
-                <h2 className="panel-title">ATC Audio</h2>
-              </header>
-              <div className="placeholder-body">
-                <p className="placeholder-note">
-                  Simultaneous LiveATC streams with per-stream volume, mute, and activity lights
-                  land here in Phase 2a.
-                </p>
-              </div>
-            </section>
+            {atcSlot ?? (
+              <section className="placeholder" aria-label="ATC Audio">
+                <header className="panel-head">
+                  <h2 className="panel-title">ATC Audio</h2>
+                </header>
+                <div className="placeholder-body">
+                  <p className="placeholder-note">
+                    Simultaneous LiveATC streams with per-stream volume, mute, and activity lights
+                    land here in Phase 2a.
+                  </p>
+                </div>
+              </section>
+            )}
           </Panel>
 
           <Separator className="separator separator-vertical" />
