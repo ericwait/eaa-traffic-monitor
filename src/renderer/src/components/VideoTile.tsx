@@ -8,16 +8,19 @@ import { FeedPlayer, type FeedPlayerStatus } from '../youtube/player'
 // Cross-origin note: a real YouTube <iframe>'s rendered content captures
 // mouse events in its OWN document — a click landing on the live picture
 // itself never reaches this component's DOM at all, by browser design (not a
-// bug here, and not fixable from the embedding page). The identity overlay
-// bar is real DOM stacked ABOVE the iframe, so double-clicking THAT strip
-// always works, live or offline. The outer tile's onDoubleClick is also wired
-// (it fires reliably whenever the hit point isn't over the live iframe
-// picture — e.g. every tile in this repo's offline-by-default e2e/CI runs,
-// and any letterboxed/empty area of a live tile). Because a live iframe can
-// still swallow a double-click over the picture itself, explicit emphasize/
-// fill buttons are also provided in the hover cluster as a guaranteed-reliable
-// path — never rely on the gesture alone for a "capability the operator
-// might not otherwise have."
+// bug here, and not fixable from the embedding page). The single onDoubleClick
+// lives on the outer .video-tile; it fires reliably whenever the hit point
+// isn't over the live iframe picture itself — which includes the identity
+// overlay bar (real DOM stacked ABOVE the iframe, so a double-click there
+// bubbles up normally) and every tile in this repo's offline-by-default
+// e2e/CI runs. (The overlay deliberately has no onDoubleClick of its own —
+// one handler on the ancestor is enough; a second one on a descendant in the
+// same bubble path would double-fire — toggle, then toggle back — for a
+// single physical double-click landing inside the overlay's area.) Because a
+// live iframe can still swallow a double-click over the picture itself,
+// explicit emphasize/fill buttons are also provided in the hover cluster as a
+// guaranteed-reliable path — never rely on the gesture alone for a
+// "capability the operator might not otherwise have."
 
 export interface VideoTileProps {
   feed: DefaultFeed
@@ -140,12 +143,11 @@ function VideoTile({
       )}
 
       {/* Identity overlay: always visible, real DOM stacked above the iframe
-          (see the cross-origin note up top) so its double-click always works. */}
-      <div
-        className="video-tile-overlay"
-        data-testid="video-tile-overlay"
-        onDoubleClick={handleDoubleClick}
-      >
+          (see the cross-origin note up top). No onDoubleClick of its own —
+          a double-click here bubbles to the outer .video-tile handler below
+          just like any other DOM descendant, so a second listener here would
+          only risk double-firing (toggle, then toggle back) for one click. */}
+      <div className="video-tile-overlay" data-testid="video-tile-overlay">
         <span className="video-tile-label">{feed.label}</span>
         <span
           className={`video-tile-badge video-tile-badge--${status === 'playing' ? 'live' : 'offline'}`}
