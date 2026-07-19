@@ -5,6 +5,9 @@ import AboutModal from './AboutModal'
 import VideoGrid from './VideoGrid'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
 import { layoutStorage } from '../state/sessionBootstrap'
+// The adaptive Wyvern Watch mark (Cream light / Ember dark), imported as a bundled
+// asset URL — never inlined as raw SVG — and rendered as a decorative <img>.
+import brandMark from '../../../../design/brand/svg/icon.svg'
 
 // The three-panel walking skeleton: ATC audio (left), flight tracking (top
 // right), live video (bottom right). ATC and video are placeholders that Phases
@@ -52,6 +55,7 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
   return (
     <div className="app-shell">
       <header className="app-header">
+        <img className="app-brand-mark" src={brandMark} alt="" aria-hidden="true" />
         <h1 className="app-brand">Airshow Traffic Monitor</h1>
         <span className="app-badge">Phase 1 · skeleton</span>
         <div className="app-header-spacer" />

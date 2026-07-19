@@ -54,6 +54,14 @@ body {
   flex: 0 0 auto;
 }
 
+.app-brand-mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: block;
+  border-radius: 4px;
+}
+
 .app-brand {
   margin: 0;
   font-size: 1rem;
@@ -327,6 +335,14 @@ body {
   border-radius: 12px;
   padding: 1.25rem 1.4rem 1.1rem;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.about-modal-mark {
+  display: block;
+  width: 72px;
+  height: 72px;
+  margin: 0 0 0.85rem;
+  border-radius: 12px;
 }
 
 .modal-title {
