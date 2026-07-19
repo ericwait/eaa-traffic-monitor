@@ -78,6 +78,22 @@ export const duckingSchema = z.object({
   releaseTauS: z.number().positive().default(0.2)
 })
 
+/**
+ * Field-weather polling (METAR/TAF). `station` is an ICAO airport id; the API
+ * queried is NOAA's aviationweather.gov Data API (no key, free — see
+ * docs/development/TechStack.md). `pollMinutes` is floored at 5 so a hand-edit
+ * can never turn this into an impolite hammering client; the default of 10
+ * matches the design doc's "measured in minutes" refresh cadence. `.default()`
+ * on the whole block means a config.json written before this feature shipped
+ * (which has no `weather` key at all) still validates and gets these defaults.
+ */
+export const weatherSchema = z.object({
+  /** ICAO station id to monitor, e.g. "KOSH". */
+  station: z.string().min(1).default('KOSH'),
+  /** Poll interval in minutes; never more often than every 5 minutes. */
+  pollMinutes: z.number().min(5).default(10)
+})
+
 /** The whole config file. Unknown top-level keys are stripped, not rejected. */
 export const configSchema = z.object({
   /** Schema version, for future migrations. */
@@ -89,7 +105,9 @@ export const configSchema = z.object({
   /** VAD tuning block. */
   vad: vadSchema,
   /** Ducking tuning block (2b). */
-  ducking: duckingSchema
+  ducking: duckingSchema,
+  /** Field-weather block (METAR/TAF polling). Optional for pre-existing config.json files. */
+  weather: weatherSchema.default({ station: 'KOSH', pollMinutes: 10 })
 })
 
 /** The validated, app-facing config type inferred from the schema. */
@@ -98,6 +116,8 @@ export type AppConfig = z.infer<typeof configSchema>
 export type StreamConfig = z.infer<typeof streamSchema>
 /** The VAD parameter block (structurally compatible with vad.ts VadParams). */
 export type VadConfig = z.infer<typeof vadSchema>
+/** The field-weather polling block. */
+export type WeatherConfig = z.infer<typeof weatherSchema>
 
 // ---------------------------------------------------------------------------
 // Curated KOSH defaults (verified live 2026-07-18). plsUrl mount form:
@@ -151,6 +171,10 @@ export const DEFAULT_CONFIG: AppConfig = {
     duckLevel: 0.25,
     duckTauS: 0.05,
     releaseTauS: 0.2
+  },
+  weather: {
+    station: 'KOSH',
+    pollMinutes: 10
   }
 }
 

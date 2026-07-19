@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Fr24NavState } from '@shared/ipc'
+import type { Fr24NavState, WeatherResult, WeatherSnapshot } from '@shared/ipc'
 import type { AudioOutputDevice } from '../audio/devices'
 
 // The per-window live UI store (zustand). Phase 1 holds just the FR24 nav state
@@ -94,6 +94,24 @@ export interface AppState {
   /** Escape / close affordance — always returns to the grid. */
   exitFillPanel: () => void
 
+  // --- Weather slice (field METAR/TAF) ------------------------------------
+  /** Latest weather snapshot (from a get/refresh call or a poll push), or null before the first successful fetch. */
+  weatherSnapshot: WeatherSnapshot | null
+  /** The most recent fetch failure's message, or null. Cleared by the next successful fetch. */
+  weatherError: string | null
+  /** True while a get/refresh call is in flight — drives the refresh button's disabled state. */
+  weatherLoading: boolean
+  /**
+   * Feed a `weather:get` / `weather:refresh` / `onUpdate` result into the
+   * slice. Success replaces the snapshot and clears any error. Failure keeps
+   * showing the last-known snapshot (preferring the result's own `stale`
+   * payload, falling back to whatever is already in the store) while
+   * surfacing the error — graceful degradation, never a blank panel.
+   */
+  setWeatherResult: (result: WeatherResult) => void
+  /** Toggle the in-flight flag around a get/refresh call. */
+  setWeatherLoading: (loading: boolean) => void
+
   // --- Pop-out feed hand-off (Phase 4) ------------------------------------
   /**
    * Feed ids currently managed by an open pop-out window. The main grid hides
@@ -144,6 +162,18 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setFillPanelFeedId: (feedId) => set({ fillPanelFeedId: feedId }),
   exitFillPanel: () => set({ fillPanelFeedId: null }),
+
+  weatherSnapshot: null,
+  weatherError: null,
+  weatherLoading: false,
+  setWeatherResult: (result) =>
+    set((state) =>
+      result.ok
+        ? { weatherSnapshot: result.snapshot, weatherError: null }
+        : { weatherSnapshot: result.stale ?? state.weatherSnapshot, weatherError: result.error }
+    ),
+  setWeatherLoading: (weatherLoading) => set({ weatherLoading }),
+
   poppedOutFeedIds: [],
   setPoppedOutFeedIds: (poppedOutFeedIds) => set({ poppedOutFeedIds })
 }))

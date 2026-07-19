@@ -3,7 +3,8 @@ import {
   configSchema,
   DEFAULT_CONFIG,
   formatConfigError,
-  streamSchema
+  streamSchema,
+  weatherSchema
 } from '@shared/defaultConfig'
 
 // Guardian tests for the config zod schema and the curated defaults. The config
@@ -48,6 +49,58 @@ describe('DEFAULT_CONFIG', () => {
       expect(s.pan).toBeGreaterThanOrEqual(-1)
       expect(s.pan).toBeLessThanOrEqual(1)
     }
+  })
+
+  it('defaults the weather block to KOSH at a 10-minute poll interval', () => {
+    expect(DEFAULT_CONFIG.weather).toEqual({ station: 'KOSH', pollMinutes: 10 })
+  })
+})
+
+describe('weatherSchema', () => {
+  it('fills in both defaults from an empty object', () => {
+    expect(weatherSchema.parse({})).toEqual({ station: 'KOSH', pollMinutes: 10 })
+  })
+
+  it('accepts a custom station and a slower poll interval', () => {
+    const parsed = weatherSchema.parse({ station: 'KMSN', pollMinutes: 15 })
+    expect(parsed).toEqual({ station: 'KMSN', pollMinutes: 15 })
+  })
+
+  it('rejects a poll interval faster than every 5 minutes', () => {
+    expect(weatherSchema.safeParse({ pollMinutes: 1 }).success).toBe(false)
+  })
+
+  it('accepts exactly the 5-minute floor', () => {
+    expect(weatherSchema.parse({ pollMinutes: 5 }).pollMinutes).toBe(5)
+  })
+
+  it('rejects an empty station id', () => {
+    expect(weatherSchema.safeParse({ station: '' }).success).toBe(false)
+  })
+})
+
+describe('configSchema weather section', () => {
+  it('a config.json written before this feature (no weather key) still validates, with defaults applied', () => {
+    const { weather, ...withoutWeather } = DEFAULT_CONFIG
+    void weather
+    const parsed = configSchema.parse(withoutWeather)
+    expect(parsed.weather).toEqual({ station: 'KOSH', pollMinutes: 10 })
+  })
+
+  it('a hand-edited config can point weather at a different station/cadence', () => {
+    const parsed = configSchema.parse({
+      ...DEFAULT_CONFIG,
+      weather: { station: 'KMSN', pollMinutes: 20 }
+    })
+    expect(parsed.weather).toEqual({ station: 'KMSN', pollMinutes: 20 })
+  })
+
+  it('rejects a config.json whose weather.pollMinutes is below the 5-minute floor', () => {
+    const result = configSchema.safeParse({
+      ...DEFAULT_CONFIG,
+      weather: { station: 'KOSH', pollMinutes: 2 }
+    })
+    expect(result.success).toBe(false)
   })
 })
 

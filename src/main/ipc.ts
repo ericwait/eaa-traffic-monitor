@@ -7,6 +7,7 @@ import type {
   ResolveStreamResult,
   SessionPatch,
   VideoLayoutState,
+  WeatherResult,
   WindowBoundsState
 } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
@@ -15,6 +16,8 @@ import type { PopoutManager } from './popouts'
 import { getSessionState, patchSessionState } from './session'
 import { getConfig, reloadConfig } from './config'
 import { clearResolveCache, resolveStream } from './plsResolver'
+import { clearWeatherCache, getWeather, refreshWeather } from './weather'
+import type { WeatherPoller } from './weatherPoller'
 
 // Main-side IPC registration, split by lifetime:
 //   - GLOBAL handlers (session, config, audio resolve, windows/pop-outs) are
@@ -102,7 +105,10 @@ function narrowPopoutPatch(value: unknown): PopoutPatch | null {
  * Register the app-global IPC handlers (session, config, audio resolve, windows).
  * Called once at app ready. Returns a disposer (used only on full teardown).
  */
-export function registerGlobalIpc(popouts: PopoutManager): () => void {
+export function registerGlobalIpc(
+  popouts: PopoutManager,
+  getWeatherPoller: () => WeatherPoller | null
+): () => void {
   ipcMain.handle(IpcChannels.sessionGet, () => getSessionState())
 
   ipcMain.on(IpcChannels.sessionPatch, (_e, patch: unknown) => {
@@ -122,6 +128,10 @@ export function registerGlobalIpc(popouts: PopoutManager): () => void {
   ipcMain.handle(IpcChannels.configReload, () => {
     const result = reloadConfig()
     clearResolveCache()
+    // The reloaded file may name a different station or poll cadence — drop
+    // the stale-station cache and restart the poll timer at the new interval.
+    clearWeatherCache()
+    getWeatherPoller()?.start()
     return result
   })
 
@@ -157,6 +167,39 @@ export function registerGlobalIpc(popouts: PopoutManager): () => void {
       }
     }
   )
+
+  // --- Weather (field METAR/TAF) ------------------------------------------
+  // getWeather/refreshWeather are written not to throw, but the same
+  // defensive catch as audioResolveStream applies — IPC must never reject.
+  ipcMain.handle(IpcChannels.weatherGet, async (): Promise<WeatherResult> => {
+    try {
+      return await getWeather()
+    } catch (err: unknown) {
+      return {
+        ok: false,
+        kind: 'unknown',
+        error: `unexpected error reading field weather: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        stale: null
+      }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.weatherRefresh, async (): Promise<WeatherResult> => {
+    try {
+      return await refreshWeather()
+    } catch (err: unknown) {
+      return {
+        ok: false,
+        kind: 'unknown',
+        error: `unexpected error refreshing field weather: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        stale: null
+      }
+    }
+  })
 
   // --- Pop-out windows (Phase 4) ------------------------------------------
   ipcMain.handle(IpcChannels.windowsOpenPopout, (_e, request: unknown): number => {
@@ -195,6 +238,8 @@ export function registerGlobalIpc(popouts: PopoutManager): () => void {
     ipcMain.removeHandler(IpcChannels.configGet)
     ipcMain.removeHandler(IpcChannels.configReload)
     ipcMain.removeHandler(IpcChannels.audioResolveStream)
+    ipcMain.removeHandler(IpcChannels.weatherGet)
+    ipcMain.removeHandler(IpcChannels.weatherRefresh)
     ipcMain.removeHandler(IpcChannels.windowsOpenPopout)
     ipcMain.removeAllListeners(IpcChannels.windowsClosePopout)
     ipcMain.removeAllListeners(IpcChannels.windowsPatchPopout)

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../state/store'
+import WeatherPanel from '../weather/WeatherPanel'
 import { audioEngine } from './engine'
 import StreamStrip from './StreamStrip'
 
@@ -8,6 +9,11 @@ import StreamStrip from './StreamStrip'
 // enable" hint, and the list of per-stream strips. All live state comes from the
 // zustand audio slice, which the engine (a plain-TS singleton) writes into; this
 // component only reads it and forwards user gestures to the engine.
+//
+// The Field Weather card is appended below the stream list — its own
+// self-contained slice of state (see WeatherPanel.tsx), sharing this panel's
+// scrollable column so the left pillar's layout stays a single Panel (no new
+// resizable region added to LayoutShell).
 
 function AudioPanel(): React.JSX.Element {
   const order = useAppStore((s) => s.audioOrder)
@@ -85,6 +91,8 @@ function AudioPanel(): React.JSX.Element {
           <StreamStrip key={id} id={id} />
         ))}
       </div>
+
+      <WeatherPanel />
     </section>
   )
 }

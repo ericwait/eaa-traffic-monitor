@@ -9,6 +9,7 @@ import { registerFr24Ipc, registerGlobalIpc } from './ipc'
 import { flushSession, getSessionState, patchSessionState } from './session'
 import { resolveSavedBounds, trackWindowBounds } from './windowState'
 import { PopoutManager } from './popouts'
+import { WeatherPoller } from './weatherPoller'
 
 // ---------------------------------------------------------------------------
 // Privileged custom scheme registration.
@@ -29,6 +30,7 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow: BrowserWindow | null = null
 let fr24: Fr24Controller | null = null
+let weatherPoller: WeatherPoller | null = null
 let disposeFr24Ipc: (() => void) | null = null
 let disposeGlobalIpc: (() => void) | null = null
 let disposeBoundsTracking: (() => void) | null = null
@@ -114,6 +116,11 @@ function createWindow(): void {
   // bound to the window's (see Fr24Controller.dispose on close, below).
   fr24 = new Fr24Controller(mainWindow)
   fr24.attach()
+  // The weather poller pushes to the main window's renderer, so it lives and
+  // dies with that window (see the close handler below).
+  weatherPoller = new WeatherPoller(mainWindow)
+  weatherPoller.start()
+
   // Only the FR24 view channels are per-main-window; session/config/audio/windows
   // are app-global (registered once at ready) so pop-outs share them.
   disposeFr24Ipc = registerFr24Ipc(fr24)
@@ -140,6 +147,8 @@ function createWindow(): void {
     disposeFr24Ipc = null
     fr24?.dispose()
     fr24 = null
+    weatherPoller?.stop()
+    weatherPoller = null
   })
 
   mainWindow.on('closed', () => {
@@ -181,7 +190,9 @@ app
     // window loads — pop-outs (and the main window) call session/config/windows
     // handlers during their renderer bootstrap.
     popouts = new PopoutManager(resolveRendererUrl)
-    disposeGlobalIpc = registerGlobalIpc(popouts)
+    // The weather poller is created with the main window (after this), so the
+    // global handlers take a getter rather than the instance.
+    disposeGlobalIpc = registerGlobalIpc(popouts, () => weatherPoller)
 
     createWindow()
 
