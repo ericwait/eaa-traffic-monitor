@@ -2,9 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AppApi,
+  ConfigResult,
   Fr24Bounds,
   Fr24NavAction,
   Fr24NavState,
+  ResolveStreamResult,
   SessionPatch,
   SessionState
 } from '@shared/ipc'
@@ -39,6 +41,16 @@ const api: AppApi = {
     patch: (patch: SessionPatch): void => {
       ipcRenderer.send(IpcChannels.sessionPatch, patch)
     }
+  },
+  config: {
+    get: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configGet),
+    reload: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configReload)
+  },
+  audio: {
+    resolveStream: (streamId: string, opts?: { fresh?: boolean }): Promise<ResolveStreamResult> =>
+      ipcRenderer.invoke(IpcChannels.audioResolveStream, streamId, opts),
+    // Static flag read once from the launch env — see AudioApi.isE2E.
+    isE2E: process.env.AUDIO_E2E === '1'
   }
 }
 
