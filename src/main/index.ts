@@ -6,7 +6,8 @@ import { startRendererServer } from './rendererServer'
 import type { RendererServer } from './rendererServer'
 import { Fr24Controller } from './fr24'
 import { registerIpc } from './ipc'
-import { flushSession } from './session'
+import { flushSession, getSessionState, patchSessionState } from './session'
+import { resolveSavedBounds, trackWindowBounds } from './windowState'
 
 // ---------------------------------------------------------------------------
 // Privileged custom scheme registration.
@@ -28,6 +29,7 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | null = null
 let fr24: Fr24Controller | null = null
 let disposeIpc: (() => void) | null = null
+let disposeBoundsTracking: (() => void) | null = null
 // The loopback renderer server (Phase 2b, decision 2026-07-19). Started once and
 // reused across window (re)creation; closed on quit.
 let rendererServer: RendererServer | null = null
@@ -73,9 +75,15 @@ async function loadRenderer(win: BrowserWindow): Promise<void> {
 }
 
 function createWindow(): void {
+  // Restore the main window's bounds onto a display that still exists (the pure
+  // validator recentres one saved on an unplugged monitor); fall back to the
+  // default size on first run and let Electron place it.
+  const restored = resolveSavedBounds(getSessionState().window, 'main window')
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: restored?.bounds.width ?? 1280,
+    height: restored?.bounds.height ?? 800,
+    ...(restored ? { x: restored.bounds.x, y: restored.bounds.y } : {}),
     show: false,
     backgroundColor: '#0b0f14',
     title: 'Airshow Traffic Monitor',
@@ -102,6 +110,12 @@ function createWindow(): void {
   fr24.attach()
   disposeIpc = registerIpc(fr24)
 
+  // Persist the main window's bounds/display on every move/resize (debounced by
+  // the session store) so a relaunch reopens exactly where it was left.
+  disposeBoundsTracking = trackWindowBounds(mainWindow, (bounds) =>
+    patchSessionState({ window: bounds })
+  )
+
   // A late-subscribing or reloaded renderer (HMR) misses the FR24 nav events
   // that already fired; re-push current nav state once the renderer finishes
   // loading so the toolbar is always in sync.
@@ -112,6 +126,8 @@ function createWindow(): void {
   // Tear the view/IPC down before the window is gone so quit never crashes on a
   // dangling child view or duplicate listeners on re-create.
   mainWindow.on('close', () => {
+    disposeBoundsTracking?.()
+    disposeBoundsTracking = null
     disposeIpc?.()
     disposeIpc = null
     fr24?.dispose()
