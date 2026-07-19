@@ -15,8 +15,42 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-19
+
+Personal-use alpha for EAA AirVenture 2026 and a validation of the release
+pipeline — not a promoted release (stream-source clearance is pending; see the
+implementation plan's milestone notes).
+
 ### Added
 
+- Field Weather card: current METAR conditions for the tracked airfield with a
+  color-coded flight-category badge (VFR / MVFR / IFR / LIFR), a wind /
+  visibility / ceiling summary, the raw METAR, and a TAF forecast timeline that
+  highlights when conditions next improve. Data comes from NOAA's
+  aviationweather.gov, cached and polled no more often than every five minutes,
+  with a manual refresh button and a stale-data indicator.
+- On-demand ATC connections: streams now start disconnected and cost nothing
+  until wanted. The status pill is the switch — click to connect a stream,
+  click again to disconnect. A wanted stream still reconnects itself, but after
+  five straight failures it calms to a "Feed down · retrying" chip on a gentle
+  once-a-minute cadence instead of an ever-climbing counter. The connected set
+  is remembered and restored on launch, staggered so LiveATC never sees a burst
+  of simultaneous connects.
+- Pop-out video windows: any feed can pop out to its own window (for example on
+  a second monitor) while the main grid keeps running; closing a pop-out
+  returns its feed to the grid.
+- Full session restore: relaunching reproduces the arranged setup unattended —
+  window size and display, panel layout, per-stream volume / mute / pan and
+  connected state, video layout, every pop-out, and the FlightRadar24 map view.
+  A window saved on a monitor that is gone at launch reappears on the primary
+  display instead of opening off-screen.
+- Wyvern Watch app identity: the packaged app carries the brand icon on macOS,
+  Windows, and Linux, and the mark appears in the app header and About dialog.
+- Release pipeline: pushing a version tag builds unsigned macOS / Windows /
+  Linux installers and publishes them to a GitHub Release, gated on this
+  changelog documenting the version.
+- Documentation site: the docs publish via MkDocs Material with native diagram
+  rendering (replacing the hand-written docs landing page).
 - ATC audio core: the eight curated KOSH LiveATC feeds play simultaneously from
   an editable `config.json`, each with its own volume, mute, and stereo pan.
   Muting drops a channel to silence but keeps watching it, so a muted channel's
@@ -96,6 +130,10 @@ All notable changes to this project are documented in this file.
   `app://` origin with error 153, so the grid was blank in a packaged build and
   only worked from the dev server; serving the packaged renderer over a loopback
   HTTP origin resolves it.
+- The FlightRadar24 panel no longer stays invisible when running from the dev
+  server: a development-only React double-mount left the panel's measurement
+  guard stuck, so the native view never received its bounds. Production builds
+  were unaffected.
 
 ### Deprecated
 
@@ -105,3 +143,11 @@ All notable changes to this project are documented in this file.
 
 - Alpha artifacts are unsigned — macOS Gatekeeper and Windows SmartScreen show
   first-launch warnings (documented in `docs/development/TechStack.md`).
+- Google blocks its sign-in flow inside embedded browser views, so
+  "Sign in with Google" cannot work in the FlightRadar24 panel ("this browser
+  or app may not be secure"). Use FlightRadar24's own email/password login in
+  the panel instead (set a password via "Forgot password" if the account is
+  Google-linked).
+- The AirVenture-only LiveATC feeds (Fisk Approach, Del/Gnd, Departure Monitor,
+  Air Show) return 404 until LiveATC activates them for the event; their pills
+  connect normally once the feeds are on the air.
