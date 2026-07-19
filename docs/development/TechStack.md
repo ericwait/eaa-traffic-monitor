@@ -65,6 +65,23 @@ It's the third that rules out a plain web app outright, and once a desktop shell
   Electron's multi-process model costs real memory next to a single native binary.
   Weighed against what it replaces — six standalone VLC instances, a separate FR24 browser window, and dozens of YouTube tabs across two monitors — the prototype this app retires was never light either.
 
+## Session restore and pop-outs (Phase 4)
+
+Full session restore is backed by a single `session.json` written through `electron-store` (decision 2026-07-19).
+The main process holds the session state authoritatively in memory: every `session:patch` merges into that live object immediately — so a read right after a write is consistent, which the audio engine relies on — and schedules a trailing-debounced (~500 ms) atomic flush to disk.
+Coalescing a slider drag's storm of patches into one write is the point of the debounce; a guaranteed flush on `will-quit` means a last-second change still inside its debounce window is never lost.
+The merge, the defensive sanitizer, and the pop-out bookkeeping are a pure module (`src/shared/session.ts`) so they are unit-tested without the store or a window.
+The restored surface is window bounds and display, the resizable panel layout (via a `react-resizable-panels` `LayoutStorage` adapter over the session), per-stream volume/mute/pan, the video layout, every pop-out, and the FR24 last URL.
+
+Per-stream volume, mute, and pan are session-restored, but priority is deliberately NOT (decision 2026-07-19): `config.json` is priority's live tuning surface, so it is re-derived from config on every launch rather than pinned in the session, where a stale value would silently override an edited config.
+
+A window's saved bounds are validated against the displays that exist at launch by a pure, Electron-free function (`src/shared/windowBounds.ts`, decision 2026-07-19): a sufficiently-visible window is left where it was, and one that is off-screen — a disconnected monitor, a display resized smaller — is recentred (and shrunk to fit) onto its last display if it survives, else the primary.
+This is what makes the Phase 4 exit criterion hold: a pop-out saved on a second monitor reappears on the primary when that monitor is unplugged, never off-screen and invisible.
+
+Pop-outs are grid-only windows that load the SAME renderer bundle at `?window=popout&id=N` (decision 2026-07-19); the preload reads that query to mount a video-only view (no ATC engine, no FR24 view) for a subset of feeds.
+The main process owns every pop-out `BrowserWindow` and its session slice — bounds/display, feeds, layout, per-feed volumes — with bounds tracked main-side and layout/volumes persisted by the pop-out renderer through the `windows:*` channels.
+Opening a pop-out hands its feeds off the main grid (a broadcast of the open set drives the hide/return in every window) and closing it returns them; quitting the app preserves the pop-out slices for next-launch restore, while a user closing one pop-out forgets it.
+
 ## Known limitations
 
 - **YouTube audio is volume/mute only.**
