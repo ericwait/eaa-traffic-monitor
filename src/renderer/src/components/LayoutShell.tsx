@@ -1,9 +1,10 @@
 import { useCallback, useEffect } from 'react'
-import { Group, Panel, Separator } from 'react-resizable-panels'
+import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import Fr24Panel from './Fr24Panel'
 import AboutModal from './AboutModal'
 import VideoGrid from './VideoGrid'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
+import { layoutStorage } from '../state/sessionBootstrap'
 
 // The three-panel walking skeleton: ATC audio (left), flight tracking (top
 // right), live video (bottom right). ATC and video are placeholders that Phases
@@ -41,6 +42,13 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
     window.dispatchEvent(new Event(FR24_RELAYOUT_EVENT))
   }, [])
 
+  // Persist + restore each resizable group's sizes through the session-backed
+  // storage adapter (Phase 4). `defaultLayout` seeds the group from the saved
+  // sizes (undefined on first run → the panels' own defaultSize); `onLayoutChanged`
+  // fires on pointer release, not during the drag, so it saves the settled layout.
+  const cols = useDefaultLayout({ id: 'cols', storage: layoutStorage })
+  const rows = useDefaultLayout({ id: 'rows', storage: layoutStorage })
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -59,7 +67,14 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
       </header>
 
       <div className="app-body">
-        <Group orientation="horizontal" className="layout-group" onLayoutChange={emitRelayout}>
+        <Group
+          id="cols"
+          orientation="horizontal"
+          className="layout-group"
+          defaultLayout={cols.defaultLayout}
+          onLayoutChange={emitRelayout}
+          onLayoutChanged={cols.onLayoutChanged}
+        >
           <Panel id="atc" className="panel atc-panel" defaultSize="22" minSize="14">
             {atcSlot ?? (
               <section className="placeholder" aria-label="ATC Audio">
@@ -79,7 +94,14 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
           <Separator className="separator separator-vertical" />
 
           <Panel id="right" className="panel" defaultSize="78" minSize="40">
-            <Group orientation="vertical" className="layout-group" onLayoutChange={emitRelayout}>
+            <Group
+              id="rows"
+              orientation="vertical"
+              className="layout-group"
+              defaultLayout={rows.defaultLayout}
+              onLayoutChange={emitRelayout}
+              onLayoutChanged={rows.onLayoutChanged}
+            >
               <Panel id="fr24" className="panel" defaultSize="62" minSize="25">
                 <Fr24Panel />
               </Panel>
