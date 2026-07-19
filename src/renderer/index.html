@@ -9,10 +9,16 @@
       covers our own bundle. Later phases relax specific directives as the
       YouTube IFrame API (youtube.com frames) and FR24 WebContentsView needs
       land — do that deliberately, per-source, never with a blanket wildcard.
+
+      Phase 2a: media-src is opened to https://*.liveatc.net so the ATC <audio>
+      elements can load their streams directly. The mounts are CORS-open
+      (access-control-allow-origin: *), so a cross-origin crossorigin="anonymous"
+      load is analysed by Web Audio without a proxy — verified live against real
+      KOSH feeds. A scoped per-source relaxation, never a blanket wildcard.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app:"
+      content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app:; media-src 'self' https://*.liveatc.net"
     />
     <title>EAA Traffic Monitor</title>
   </head>
