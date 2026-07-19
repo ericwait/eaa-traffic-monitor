@@ -1,6 +1,7 @@
 import type { LayoutStorage } from 'react-resizable-panels'
-import type { SessionState } from '@shared/ipc'
+import type { SessionState, VideoLayoutState } from '@shared/ipc'
 import { defaultSessionState } from '@shared/session'
+import { useAppStore, type AppState } from './store'
 
 // Renderer-side session bootstrap. The persisted session is fetched ONCE before
 // the app mounts (see main.tsx) and stashed here as a synchronous snapshot, so
@@ -46,4 +47,49 @@ export const layoutStorage: LayoutStorage = {
     snapshot = { ...snapshot, layout: { ...snapshot.layout, [key]: value } }
     window.api.session.patch({ layout: { [key]: value } })
   }
+}
+
+/** Read the store's three video-layout fields as one VideoLayoutState. */
+function readVideoLayout(state: AppState): VideoLayoutState {
+  return {
+    mode: state.videoLayoutMode,
+    emphasizedFeedId: state.emphasizedFeedId,
+    fillPanelFeedId: state.fillPanelFeedId
+  }
+}
+
+/**
+ * Apply the saved main-window video layout into the store BEFORE first render, so
+ * the grid opens in its restored mode with no uniform-then-restore flash. Called
+ * from the bootstrap once the snapshot is loaded.
+ */
+export function hydrateVideoLayout(): void {
+  const { mode, emphasizedFeedId, fillPanelFeedId } = snapshot.video
+  useAppStore.setState({
+    videoLayoutMode: mode,
+    emphasizedFeedId,
+    fillPanelFeedId
+  })
+}
+
+/**
+ * Persist the main-window video layout on every change. Subscribing to the whole
+ * store is cheap — the listener early-returns unless one of the three layout
+ * fields actually moved, so audio-activity churn does not trigger a write.
+ */
+export function startVideoLayoutPersistence(): void {
+  let prev = readVideoLayout(useAppStore.getState())
+  useAppStore.subscribe((state) => {
+    const next = readVideoLayout(state)
+    if (
+      next.mode === prev.mode &&
+      next.emphasizedFeedId === prev.emphasizedFeedId &&
+      next.fillPanelFeedId === prev.fillPanelFeedId
+    ) {
+      return
+    }
+    prev = next
+    snapshot = { ...snapshot, video: next }
+    window.api.session.patch({ video: next })
+  })
 }
