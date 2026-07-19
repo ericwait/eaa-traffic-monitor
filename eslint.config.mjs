@@ -9,7 +9,15 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 // formatting rules win over any stylistic rule from the TS/React presets.
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/.playwright/**']
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/out/**',
+      '**/.playwright/**',
+      // Per-agent git worktrees dropped by Claude Code during multi-agent
+      // sessions — separate checkouts that run their own lint.
+      '**/.claude/worktrees/**'
+    ]
   },
   {
     settings: {
