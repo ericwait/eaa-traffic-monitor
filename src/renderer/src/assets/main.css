@@ -365,3 +365,224 @@ body {
 .modal-close:hover {
   filter: brightness(1.08);
 }
+
+/* =============================================================================
+   PHASE 3 — Live Video grid (YouTube). Appended section; existing rules above
+   are untouched. See src/renderer/src/components/VideoGrid.tsx + VideoTile.tsx.
+============================================================================= */
+
+/* Mirrors .placeholder's flex-column-fill shape (see above) for the Live
+   Video panel's own section wrapper, now that it hosts the grid instead of a
+   placeholder note. */
+.video-panel-section {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.video-panel-section .video-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.video-grid {
+  height: 100%;
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  min-height: 0;
+  min-width: 0;
+  background: var(--panel-2);
+}
+
+.video-grid--fill {
+  display: block;
+  padding: 0;
+  gap: 0;
+}
+
+.video-tile {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #05070a;
+  border: 1px solid var(--line);
+  /* Establishes a proper stacking context for this tile, so the identity
+     overlay and hover controls z-index cleanly above the embedded YouTube
+     iframe rather than depending on default paint order against a cross-origin
+     frame's separately-composited surface. Defensive: the actual bug found in
+     live testing (mute button unreachable) traced to hover-state handling —
+     see VideoTile.tsx and the .video-tile-controls comment below — but correct
+     stacking against an overlaid iframe is worth keeping explicit regardless. */
+  isolation: isolate;
+}
+
+.video-tile--emphasized {
+  border-color: var(--accent);
+}
+
+.video-tile--filled {
+  height: 100%;
+  width: 100%;
+  border-radius: 0;
+  border: none;
+}
+
+.video-tile-player {
+  position: absolute;
+  inset: 0;
+}
+
+/* The <iframe> YT.Player inserts fills its host div. */
+.video-tile-player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* Shown whenever a tile isn't actively playing — never a black hole. */
+.video-tile-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.75rem;
+  text-align: center;
+  background: linear-gradient(180deg, #10151c, #05070a);
+}
+
+.video-tile-placeholder-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.video-tile-placeholder-status {
+  margin: 0;
+  max-width: 26ch;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* Identity overlay: feed name + LIVE/OFFLINE badge, always visible. Real DOM
+   stacked above the iframe (z-index) — see the cross-origin note in
+   VideoTile.tsx for why this bar (not the video picture) is the reliable
+   double-click target. */
+.video-tile-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.25rem 0.4rem;
+  background: linear-gradient(180deg, rgba(3, 6, 10, 0.75), rgba(3, 6, 10, 0));
+}
+
+.video-tile-label {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.video-tile-badge {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.video-tile-badge--live {
+  color: #06210f;
+  background: #3ddc84;
+}
+
+.video-tile-badge--offline {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--line-strong) 60%, transparent);
+}
+
+/* Hover-revealed audio control cluster + emphasize/fill buttons. Sits above
+   the iframe (z-index) and is the guaranteed-reliable click target for every
+   tile interaction — see VideoTile.tsx's cross-origin note. */
+.video-tile-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.4rem;
+  background: linear-gradient(0deg, rgba(3, 6, 10, 0.85), rgba(3, 6, 10, 0));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+/* Driven by VideoTile.tsx's onMouseEnter/onMouseLeave state, NOT the :hover
+   pseudo-class — see the comment there: a synthetic single-jump pointer move
+   straight onto the live iframe (what automated test tools do) can leave
+   `:hover` unmatched on this ancestor even though real, continuous mouse
+   movement matches it fine. mouseenter/mouseleave aren't sensitive to that,
+   so this sidesteps the gap either way. :focus-within stays for keyboard
+   navigation. */
+.video-tile.video-tile--hovering .video-tile-controls,
+.video-tile:focus-within .video-tile-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.video-tile-mute-btn,
+.video-tile-emphasize-btn,
+.video-tile-fill-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.video-tile-mute-btn:hover,
+.video-tile-emphasize-btn:hover,
+.video-tile-fill-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.video-tile-volume {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}

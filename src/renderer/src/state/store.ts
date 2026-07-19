@@ -14,6 +14,16 @@ const INITIAL_NAV_STATE: Fr24NavState = {
   isLoading: false
 }
 
+// ---------------------------------------------------------------------------
+// Video slice (Phase 3) — the YouTube grid's layout mode, which feed (if any)
+// is emphasized, and which feed (if any) fills the entire video panel. Live
+// per-tile state (volume/mute, player status) stays local to each VideoTile —
+// only the cross-tile layout decisions belong in shared UI state, same
+// "only what other things need to react to" principle as overlayOpen above.
+// ---------------------------------------------------------------------------
+
+export type VideoLayoutMode = 'uniform' | 'emphasized'
+
 export interface AppState {
   /** Latest FR24 navigation state, mirrored from the main process. */
   navState: Fr24NavState
@@ -27,13 +37,42 @@ export interface AppState {
   overlayOpen: boolean
   setNavState: (navState: Fr24NavState) => void
   setOverlayOpen: (overlayOpen: boolean) => void
+
+  /** 'uniform' (grid, all tiles equal) or 'emphasized' (one big tile + rail). */
+  videoLayoutMode: VideoLayoutMode
+  /** The feed id occupying the emphasized "big" tile; null in uniform mode. */
+  emphasizedFeedId: string | null
+  /** The feed id filling the ENTIRE video panel (grid hidden); null otherwise. */
+  fillPanelFeedId: string | null
+  /**
+   * Double-click behavior: emphasizing the same feed again demotes it back to
+   * uniform mode; emphasizing a different feed re-targets the big tile.
+   */
+  toggleEmphasizedFeed: (feedId: string) => void
+  /** Fill-panel button (or double-click while already emphasized). */
+  setFillPanelFeedId: (feedId: string | null) => void
+  /** Escape / close affordance — always returns to the grid. */
+  exitFillPanel: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   navState: INITIAL_NAV_STATE,
   overlayOpen: false,
   setNavState: (navState) => set({ navState }),
-  setOverlayOpen: (overlayOpen) => set({ overlayOpen })
+  setOverlayOpen: (overlayOpen) => set({ overlayOpen }),
+
+  videoLayoutMode: 'uniform',
+  emphasizedFeedId: null,
+  fillPanelFeedId: null,
+  toggleEmphasizedFeed: (feedId) =>
+    set((state) => {
+      const alreadyEmphasized = state.emphasizedFeedId === feedId
+      return alreadyEmphasized
+        ? { videoLayoutMode: 'uniform', emphasizedFeedId: null }
+        : { videoLayoutMode: 'emphasized', emphasizedFeedId: feedId }
+    }),
+  setFillPanelFeedId: (feedId) => set({ fillPanelFeedId: feedId }),
+  exitFillPanel: () => set({ fillPanelFeedId: null })
 }))
 
 /**
