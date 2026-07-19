@@ -87,6 +87,7 @@ function sanitizeStreamSettings(value: unknown): AudioStreamSettings | undefined
   if (typeof value.muted === 'boolean') out.muted = value.muted
   const pan = asFiniteNumber(value.pan)
   if (pan !== undefined) out.pan = Math.min(1, Math.max(-1, pan))
+  if (typeof value.connected === 'boolean') out.connected = value.connected
   return out
 }
 
