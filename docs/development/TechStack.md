@@ -82,6 +82,14 @@ Pop-outs are grid-only windows that load the SAME renderer bundle at `?window=po
 The main process owns every pop-out `BrowserWindow` and its session slice — bounds/display, feeds, layout, per-feed volumes — with bounds tracked main-side and layout/volumes persisted by the pop-out renderer through the `windows:*` channels.
 Opening a pop-out hands its feeds off the main grid (a broadcast of the open set drives the hide/return in every window) and closing it returns them; quitting the app preserves the pop-out slices for next-launch restore, while a user closing one pop-out forgets it.
 
+## Versioning and releases
+
+The version is computed from git history, never hand-edited (decision 2026-07-18) — `package.json` stays at `0.0.0` on purpose.
+GitVersion reads the GitHubFlow history: every commit on `develop` is an `-alpha.N` pre-release (for example `0.1.0-alpha.7`), and the real major/minor/patch is decided only when `develop` is released to `main` and tagged.
+CI is the authoritative computer of that version — the `version` job in [ci.yml](https://github.com/ericwait/airshow-traffic-monitor/blob/main/.github/workflows/ci.yml) runs GitVersion on a full-history checkout, and `just version` is a local convenience that prints the same SemVer and degrades to an install hint when GitVersion is absent.
+Releases are cut by pushing a `v` + SemVer tag (for example `v0.1.0`): [release.yml](https://github.com/ericwait/airshow-traffic-monitor/blob/main/.github/workflows/release.yml) gates on a matching `CHANGELOG.md` section, builds the unsigned three-OS installers, stamps the tag's version onto the artifacts, and publishes them to a GitHub Release.
+A tag carrying a pre-release identifier (the `-` in `v0.1.0-alpha.1`) publishes as a GitHub pre-release; a clean `v0.1.0` publishes as a full release.
+
 ## Known limitations
 
 - **YouTube audio is volume/mute only.**

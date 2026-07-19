@@ -9,7 +9,21 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 // formatting rules win over any stylistic rule from the TS/React presets.
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/.playwright/**']
+    // Build/vendor artifacts only — never source. The website/ entries are the
+    // MkDocs build output and the uv-managed virtualenv (both gitignored); ESLint
+    // flat config does not read .gitignore, so they must be listed here or the
+    // docs toolchain's bundled JS floods the lint run.
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/out/**',
+      '**/.playwright/**',
+      'website/site/**',
+      'website/.venv/**',
+      // Per-agent git worktrees dropped by Claude Code during multi-agent
+      // sessions — separate checkouts that run their own lint.
+      '**/.claude/worktrees/**'
+    ]
   },
   {
     settings: {

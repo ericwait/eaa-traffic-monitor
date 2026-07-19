@@ -70,4 +70,4 @@ If either command can't launch, see [Getting-Started.md](Getting-Started.md) § 
 
 The FAST tier (every PR) runs eslint, tsc, and the vitest unit tier.
 The FULL gate (a develop-to-main PR, or a manual dispatch) adds the Playwright-Electron e2e under xvfb and a non-blocking `npm audit`.
-See [`../../.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
+See [`.github/workflows/ci.yml`](https://github.com/ericwait/airshow-traffic-monitor/blob/main/.github/workflows/ci.yml).

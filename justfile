@@ -149,3 +149,23 @@ version:
         echo "CI computes the authoritative version regardless (see .github/workflows/ci.yml)." >&2
         exit 1
     fi
+
+# CONTRACT: build the public documentation site with MkDocs Material, STRICT —
+# a broken internal link, a bad nav entry, or an unresolved anchor fails the
+# build (the same gate CI runs). The site machinery and its uv-managed Python
+# deps live in website/; the CONTENT stays in docs/ and is never edited here.
+# `uv run` provisions the pinned toolchain from website/uv.lock on first use, so
+# this is an idempotent bootstrap like `dev`. Output lands in website/site/
+# (gitignored) — the identical artifact the Pages workflow uploads.
+#
+# Build the docs site from docs/ (MkDocs Material, strict).
+site:
+    cd website && uv run mkdocs build --strict
+
+# CONTRACT: serve the docs site locally with live reload for authoring — NOT
+# strict, so an in-progress broken link doesn't kill the preview (`site` and CI
+# enforce strict). Binds http://127.0.0.1:8000; Ctrl-C to stop.
+#
+# Preview the docs site locally with live reload.
+site-preview:
+    cd website && uv run mkdocs serve
