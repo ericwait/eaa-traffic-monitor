@@ -31,8 +31,10 @@ function AudioPanel(): React.JSX.Element {
           type="button"
           className="audio-reload-btn"
           data-testid="audio-reload"
-          aria-label="Reload config"
-          title="Reload config.json"
+          // Accessible name deliberately avoids the word "Reload" so it does not
+          // collide with the FR24 toolbar's "Reload" button in role-name queries.
+          aria-label="Refresh config from disk"
+          title="Re-read config.json from disk"
           onClick={() => void audioEngine.reload()}
         >
           &#8635;
