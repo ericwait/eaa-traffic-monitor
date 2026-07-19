@@ -14,6 +14,7 @@ function AudioPanel(): React.JSX.Element {
   const banner = useAppStore((s) => s.audioBanner)
   const needsGesture = useAppStore((s) => s.audioNeedsGesture)
   const setBanner = useAppStore((s) => s.setAudioBanner)
+  const soloId = useAppStore((s) => s.audioSolo)
 
   // Build + start the engine once. ensureStarted is StrictMode-safe and the
   // engine lives for the window's life, so there is deliberately no teardown on
@@ -21,6 +22,18 @@ function AudioPanel(): React.JSX.Element {
   useEffect(() => {
     void audioEngine.ensureStarted()
   }, [])
+
+  // Escape releases a held solo. Guarded on soloId so this never swallows an
+  // Escape meant for another surface (e.g. the video fill-panel) when no solo is
+  // active — it only acts when there is a solo to release.
+  useEffect(() => {
+    if (soloId === null) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') audioEngine.setSolo(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [soloId])
 
   return (
     <section className="audio-panel" aria-label="ATC Audio">

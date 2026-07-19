@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Fr24NavState } from '@shared/ipc'
+import type { AudioOutputDevice } from '../audio/devices'
 
 // The per-window live UI store (zustand). Phase 1 holds just the FR24 nav state
 // (pushed from main) and the overlay flag that drives the z-order rule. It works
@@ -53,6 +54,18 @@ export interface AppState {
    * a "click to enable audio" hint until the first user gesture unlocks it.
    */
   audioNeedsGesture: boolean
+  /**
+   * The soloed stream id, or null. Momentary UI state (Phase 2b) — never
+   * persisted: a solo is a live override the operator holds, not a saved setting.
+   * The engine is the authority; it mirrors the value here for the button state.
+   */
+  audioSolo: string | null
+  /**
+   * The concrete output devices available for per-stream routing, refreshed on
+   * mount and on every `devicechange`. The "System default" option is synthetic
+   * (see audio/devices.ts) and prepended by the picker, so it is NOT in this list.
+   */
+  audioOutputs: AudioOutputDevice[]
   /** Replace the whole stream set (engine build / rebuild). */
   initAudioStreams: (streams: AudioStreamUi[]) => void
   /** Shallow-merge a patch into one stream's UI state. */
@@ -61,6 +74,10 @@ export interface AppState {
   setAudioBanner: (banner: AudioBanner | null) => void
   /** Set the autoplay-gesture hint flag. */
   setAudioNeedsGesture: (needsGesture: boolean) => void
+  /** Mirror the engine's current solo selection (null = none). */
+  setAudioSolo: (id: string | null) => void
+  /** Replace the enumerated output-device list. */
+  setAudioOutputs: (outputs: AudioOutputDevice[]) => void
   /** 'uniform' (grid, all tiles equal) or 'emphasized' (one big tile + rail). */
   videoLayoutMode: VideoLayoutMode
   /** The feed id occupying the emphasized "big" tile; null in uniform mode. */
@@ -88,6 +105,8 @@ export const useAppStore = create<AppState>((set) => ({
   audioOrder: [],
   audioBanner: null,
   audioNeedsGesture: false,
+  audioSolo: null,
+  audioOutputs: [],
   initAudioStreams: (streams) =>
     set({
       audioStreams: Object.fromEntries(streams.map((s) => [s.id, s])),
@@ -101,6 +120,8 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setAudioBanner: (audioBanner) => set({ audioBanner }),
   setAudioNeedsGesture: (audioNeedsGesture) => set({ audioNeedsGesture }),
+  setAudioSolo: (audioSolo) => set({ audioSolo }),
+  setAudioOutputs: (audioOutputs) => set({ audioOutputs }),
   videoLayoutMode: 'uniform',
   emphasizedFeedId: null,
   fillPanelFeedId: null,
@@ -154,6 +175,24 @@ export interface AudioStreamUi {
   lastError: string | null
   /** Epoch ms of the next reconnect attempt, for the countdown tooltip. */
   nextRetryAt: number | null
+  /**
+   * Current duck-gain target in [0, 1] (Phase 2b). 1 = full, config.duckLevel =
+   * ducked, 0 = silenced by a solo elsewhere. Surfaced per strip as a data
+   * attribute always (verification hook) and a numeric readout in dev mode, so
+   * ducking can be SEEN without being heard — the night before the show that is
+   * the only way to check it.
+   */
+  duckTarget: number
+  /** Routed output device id ('' = system default). */
+  deviceId: string
+  /** Routed output device label (for the picker's current value + relabel match). */
+  deviceLabel: string
+  /**
+   * A visible per-strip notice, e.g. a routed device was unplugged and the stream
+   * fell back to the default output. Null when there is nothing to say. Distinct
+   * from lastError (which is stream-health); this is about routing.
+   */
+  deviceNotice: string | null
 }
 
 /** The config fallback banner payload. */
