@@ -14,7 +14,6 @@ import type {
   AudioDeviceSelection,
   AudioStreamSettings,
   FeedAudioState,
-  PopoutPatch,
   PopoutState,
   PopoutSummary,
   SessionPatch,
@@ -22,6 +21,13 @@ import type {
   VideoLayoutState,
   WindowBoundsState
 } from './ipc'
+
+/**
+ * The main-process pop-out slice patch: the renderer's PopoutPatch fields
+ * (video/volumes/feedIds) PLUS `bounds`, which only the main process (which owns
+ * the window) sets from its move/resize tracking.
+ */
+export type PopoutSlicePatch = Partial<Omit<PopoutState, 'id'>>
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -242,14 +248,19 @@ export function removePopout(state: SessionState, id: number): SessionState {
   return { ...state, popouts: state.popouts.filter((p) => p.id !== id) }
 }
 
-/** Merge `patch` into the pop-out with `id` (no-op when absent). */
-export function patchPopout(state: SessionState, id: number, patch: PopoutPatch): SessionState {
+/** Merge `patch` (bounds / feeds / video / volumes) into the pop-out with `id` (no-op when absent). */
+export function patchPopout(
+  state: SessionState,
+  id: number,
+  patch: PopoutSlicePatch
+): SessionState {
   return {
     ...state,
     popouts: state.popouts.map((p) => {
       if (p.id !== id) return p
       return {
         ...p,
+        bounds: patch.bounds ?? p.bounds,
         feedIds: patch.feedIds ?? p.feedIds,
         video: patch.video ?? p.video,
         volumes: patch.volumes ? { ...p.volumes, ...patch.volumes } : p.volumes

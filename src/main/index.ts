@@ -5,9 +5,10 @@ import { APP_SCHEME, APP_ORIGIN, registerAppScheme } from './protocol'
 import { startRendererServer } from './rendererServer'
 import type { RendererServer } from './rendererServer'
 import { Fr24Controller } from './fr24'
-import { registerIpc } from './ipc'
+import { registerFr24Ipc, registerGlobalIpc } from './ipc'
 import { flushSession, getSessionState, patchSessionState } from './session'
 import { resolveSavedBounds, trackWindowBounds } from './windowState'
+import { PopoutManager } from './popouts'
 
 // ---------------------------------------------------------------------------
 // Privileged custom scheme registration.
@@ -28,25 +29,30 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow: BrowserWindow | null = null
 let fr24: Fr24Controller | null = null
-let disposeIpc: (() => void) | null = null
+let disposeFr24Ipc: (() => void) | null = null
+let disposeGlobalIpc: (() => void) | null = null
 let disposeBoundsTracking: (() => void) | null = null
 // The loopback renderer server (Phase 2b, decision 2026-07-19). Started once and
 // reused across window (re)creation; closed on quit.
 let rendererServer: RendererServer | null = null
+// The pop-out window manager (Phase 4). Created once at ready and shared with the
+// windows:* IPC handlers; owns every pop-out BrowserWindow and its session slice.
+let popouts: PopoutManager | null = null
 
 /**
- * Decide the URL the main renderer loads from:
+ * Decide the URL a renderer loads from, appending `query` (e.g. `?window=popout&id=1`):
  *   dev server present (ELECTRON_RENDERER_URL) -> the electron-vite HMR server,
  *   otherwise                                  -> the loopback http server,
  *   loopback bind failure                      -> the app:// scheme (degraded).
  *
  * The packaged renderer is served over http (not app://) because the YouTube
  * IFrame API validates the embedding origin and rejects app:// (error 153); a
- * real http(s) origin is required. app:// stays registered as the fallback.
+ * real http(s) origin is required. app:// stays registered as the fallback. The
+ * same resolver serves the main window (empty query) and every pop-out.
  */
-async function rendererUrlToLoad(): Promise<string> {
+async function resolveRendererUrl(query = ''): Promise<string> {
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']
-  if (devServerUrl) return devServerUrl
+  if (devServerUrl) return `${devServerUrl}${query}`
 
   if (!rendererServer) {
     try {
@@ -57,15 +63,15 @@ async function rendererUrlToLoad(): Promise<string> {
           '(embed-origin validation rejects app://) — falling back to the app:// scheme:',
         err
       )
-      return `${APP_ORIGIN}/index.html`
+      return `${APP_ORIGIN}/index.html${query}`
     }
   }
-  return `${rendererServer.url}/index.html`
+  return `${rendererServer.url}/index.html${query}`
 }
 
-/** Resolve the renderer URL, then load it into the window (guarded + logged). */
+/** Resolve the main renderer URL, then load it into the window (guarded + logged). */
 async function loadRenderer(win: BrowserWindow): Promise<void> {
-  const url = await rendererUrlToLoad()
+  const url = await resolveRendererUrl()
   if (win.isDestroyed()) return
   try {
     await win.loadURL(url)
@@ -108,7 +114,9 @@ function createWindow(): void {
   // bound to the window's (see Fr24Controller.dispose on close, below).
   fr24 = new Fr24Controller(mainWindow)
   fr24.attach()
-  disposeIpc = registerIpc(fr24)
+  // Only the FR24 view channels are per-main-window; session/config/audio/windows
+  // are app-global (registered once at ready) so pop-outs share them.
+  disposeFr24Ipc = registerFr24Ipc(fr24)
 
   // Persist the main window's bounds/display on every move/resize (debounced by
   // the session store) so a relaunch reopens exactly where it was left.
@@ -128,8 +136,8 @@ function createWindow(): void {
   mainWindow.on('close', () => {
     disposeBoundsTracking?.()
     disposeBoundsTracking = null
-    disposeIpc?.()
-    disposeIpc = null
+    disposeFr24Ipc?.()
+    disposeFr24Ipc = null
     fr24?.dispose()
     fr24 = null
   })
@@ -169,7 +177,17 @@ app
       optimizer.watchWindowShortcuts(window)
     })
 
+    // Create the pop-out manager and register the app-global IPC BEFORE any
+    // window loads — pop-outs (and the main window) call session/config/windows
+    // handlers during their renderer bootstrap.
+    popouts = new PopoutManager(resolveRendererUrl)
+    disposeGlobalIpc = registerGlobalIpc(popouts)
+
     createWindow()
+
+    // Reopen every pop-out that was open at last quit, each validated onto a
+    // connected display (a pop-out whose monitor is gone reappears on primary).
+    popouts.restoreAll()
 
     app.on('activate', () => {
       // macOS: re-create a window when the dock icon is clicked and none are open.
@@ -189,10 +207,19 @@ app.on('window-all-closed', () => {
   app.quit()
 })
 
+// Mark the pop-out manager as quitting BEFORE any window closes, so pop-out
+// windows tearing down on quit keep their session slices for next-launch restore
+// (a user closing one pop-out still forgets it — that path is not a quit).
+app.on('before-quit', () => {
+  popouts?.setQuitting()
+})
+
 // Flush any debounced session state and release the loopback renderer server's
 // port on the way out. flushSession is synchronous + atomic, so a patch still
 // inside its ~500 ms debounce window (a last-second layout drag) is not lost.
 app.on('will-quit', () => {
+  disposeGlobalIpc?.()
+  disposeGlobalIpc = null
   flushSession()
   rendererServer?.close()
   rendererServer = null

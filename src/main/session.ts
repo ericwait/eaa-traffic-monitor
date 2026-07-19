@@ -1,12 +1,13 @@
 import ElectronStore from 'electron-store'
-import type { PopoutPatch, PopoutState, SessionPatch, SessionState } from '@shared/ipc'
+import type { PopoutState, SessionPatch, SessionState } from '@shared/ipc'
 import {
   applySessionPatch,
   defaultSessionState,
   patchPopout as patchPopoutState,
   removePopout as removePopoutState,
   sanitizeSessionState,
-  upsertPopout as upsertPopoutState
+  upsertPopout as upsertPopoutState,
+  type PopoutSlicePatch
 } from '@shared/session'
 
 // Persisted session (electron-store). Phase 4 completes full session restore
@@ -141,8 +142,8 @@ export function removePopout(id: number): void {
   scheduleFlush()
 }
 
-/** Merge a patch into one pop-out's slice, then schedule a flush. */
-export function patchPopout(id: number, patch: PopoutPatch): void {
+/** Merge a patch (bounds / feeds / video / volumes) into one pop-out's slice, then flush. */
+export function patchPopout(id: number, patch: PopoutSlicePatch): void {
   current = patchPopoutState(load(), id, patch)
   scheduleFlush()
 }

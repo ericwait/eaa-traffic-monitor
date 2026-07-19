@@ -93,6 +93,16 @@ export interface AppState {
   setFillPanelFeedId: (feedId: string | null) => void
   /** Escape / close affordance — always returns to the grid. */
   exitFillPanel: () => void
+
+  // --- Pop-out feed hand-off (Phase 4) ------------------------------------
+  /**
+   * Feed ids currently managed by an open pop-out window. The main grid hides
+   * these tiles (their management moved to the pop-out) and shows them again when
+   * the pop-out closes. Mirrored from the main-process windows:popoutsChanged push.
+   */
+  poppedOutFeedIds: string[]
+  /** Replace the popped-out feed set (from the popouts-changed broadcast). */
+  setPoppedOutFeedIds: (feedIds: string[]) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -133,7 +143,9 @@ export const useAppStore = create<AppState>((set) => ({
         : { videoLayoutMode: 'emphasized', emphasizedFeedId: feedId }
     }),
   setFillPanelFeedId: (feedId) => set({ fillPanelFeedId: feedId }),
-  exitFillPanel: () => set({ fillPanelFeedId: null })
+  exitFillPanel: () => set({ fillPanelFeedId: null }),
+  poppedOutFeedIds: [],
+  setPoppedOutFeedIds: (poppedOutFeedIds) => set({ poppedOutFeedIds })
 }))
 
 /**

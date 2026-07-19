@@ -31,6 +31,14 @@ export interface VideoTileProps {
   filled: boolean
   onToggleEmphasize: () => void
   onFillPanel: () => void
+  /** Restored starting volume (0..100); defaults to 100 when unspecified. */
+  initialVolume?: number
+  /** Restored starting mute; players default to muted so autoplay is guaranteed. */
+  initialMuted?: boolean
+  /** Called whenever this tile's volume/mute changes, for per-feed persistence. */
+  onAudioChange?: (state: { volume: number; muted: boolean }) => void
+  /** When provided, a "pop out" button appears that carries this feed to its own window. */
+  onPopOut?: () => void
 }
 
 const AUDIO_BOUNDARY_TOOLTIP =
@@ -57,15 +65,20 @@ function VideoTile({
   emphasized,
   filled,
   onToggleEmphasize,
-  onFillPanel
+  onFillPanel,
+  initialVolume,
+  initialMuted,
+  onAudioChange,
+  onPopOut
 }: VideoTileProps): React.JSX.Element {
   const playerHostRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<FeedPlayer | null>(null)
   const [status, setStatus] = useState<FeedPlayerStatus>('loading')
   const [message, setMessage] = useState<string | undefined>(undefined)
-  const [volume, setVolume] = useState(100)
-  // Players start muted (playerVars.mute: 1) so autoplay is guaranteed.
-  const [muted, setMuted] = useState(true)
+  const [volume, setVolume] = useState(initialVolume ?? 100)
+  // Players start muted (playerVars.mute: 1) so autoplay is guaranteed, unless a
+  // restored pop-out slice says this feed was left unmuted.
+  const [muted, setMuted] = useState(initialMuted ?? true)
   // Tracked in state rather than via the CSS `:hover` pseudo-class. Real
   // continuous mouse movement (any human) does keep `.video-tile:hover`
   // matched fine even over the live cross-origin iframe — verified live. The
@@ -97,17 +110,35 @@ function VideoTile({
     }
   }, [feed.label, feed.videoId])
 
+  // Push restored volume/mute to the YouTube player once it first reaches
+  // 'playing' (players always start muted for guaranteed autoplay, so a restored
+  // unmuted/at-volume feed needs this one-time apply). Offline feeds never reach
+  // 'playing', so nothing happens — no crash on the offline-by-default e2e run.
+  const initialAppliedRef = useRef(false)
+  useEffect(() => {
+    if (status !== 'playing' || initialAppliedRef.current) return
+    initialAppliedRef.current = true
+    const player = playerRef.current
+    if (!player) return
+    player.setVolume(volume)
+    if (muted) player.mute()
+    else player.unMute()
+  }, [status, volume, muted])
+
   const handleVolumeChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>): void => {
       const next = Number(e.target.value)
       setVolume(next)
       playerRef.current?.setVolume(next)
+      let nextMuted = muted
       if (next > 0 && muted) {
+        nextMuted = false
         setMuted(false)
         playerRef.current?.unMute()
       }
+      onAudioChange?.({ volume: next, muted: nextMuted })
     },
-    [muted]
+    [muted, onAudioChange]
   )
 
   const handleMuteToggle = useCallback((): void => {
@@ -115,9 +146,10 @@ function VideoTile({
       const nextMuted = !prevMuted
       if (nextMuted) playerRef.current?.mute()
       else playerRef.current?.unMute()
+      onAudioChange?.({ volume, muted: nextMuted })
       return nextMuted
     })
-  }, [])
+  }, [onAudioChange, volume])
 
   const handleDoubleClick = useCallback((): void => {
     if (emphasized) onFillPanel()
@@ -210,6 +242,17 @@ function VideoTile({
         >
           {'⤢'}
         </button>
+        {onPopOut && (
+          <button
+            type="button"
+            className="video-tile-popout-btn"
+            aria-label={`Pop out ${feed.label}`}
+            title="Open this feed in its own window (for a second monitor)"
+            onClick={onPopOut}
+          >
+            {'⧉'}
+          </button>
+        )}
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 import type { LayoutStorage } from 'react-resizable-panels'
-import type { SessionState, VideoLayoutState } from '@shared/ipc'
+import type { PopoutState, PopoutSummary, SessionState, VideoLayoutState } from '@shared/ipc'
 import { defaultSessionState } from '@shared/session'
 import { useAppStore, type AppState } from './store'
 
@@ -92,4 +92,28 @@ export function startVideoLayoutPersistence(): void {
     snapshot = { ...snapshot, video: next }
     window.api.session.patch({ video: next })
   })
+}
+
+/** Every feed id claimed by an open pop-out in a summary list (deduplicated). */
+function unionFeeds(popouts: readonly PopoutSummary[]): string[] {
+  return [...new Set(popouts.flatMap((p) => p.feedIds))]
+}
+
+/**
+ * Seed the main grid's hand-off set from the restored pop-outs (main window),
+ * then keep it in step with live open/close via the windows:popoutsChanged push,
+ * so a popped-out feed is hidden in the main grid and returns when its pop-out closes.
+ */
+export function startPopoutFeedTracking(): void {
+  useAppStore.getState().setPoppedOutFeedIds(unionFeeds(snapshot.popouts))
+  window.api.windows.onPopoutsChanged((popouts) => {
+    useAppStore.getState().setPoppedOutFeedIds(unionFeeds(popouts))
+  })
+}
+
+/** This pop-out window's own persisted slice (by its launch id), or undefined. */
+export function currentPopoutSlice(): PopoutState | undefined {
+  const id = window.api.windows.popoutId
+  if (id === null) return undefined
+  return snapshot.popouts.find((p) => p.id === id)
 }

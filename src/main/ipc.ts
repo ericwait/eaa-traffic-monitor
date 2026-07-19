@@ -1,14 +1,28 @@
 import { ipcMain } from 'electron'
-import type { Fr24Bounds, Fr24NavAction, ResolveStreamResult, SessionPatch } from '@shared/ipc'
+import type {
+  Fr24Bounds,
+  Fr24NavAction,
+  OpenPopoutRequest,
+  PopoutPatch,
+  ResolveStreamResult,
+  SessionPatch,
+  VideoLayoutState,
+  WindowBoundsState
+} from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
 import type { Fr24Controller } from './fr24'
+import type { PopoutManager } from './popouts'
 import { getSessionState, patchSessionState } from './session'
 import { getConfig, reloadConfig } from './config'
 import { clearResolveCache, resolveStream } from './plsResolver'
 
-// Main-side IPC registration for Phase 1: the FR24 view channels plus the
-// minimal session get/patch. Hand-rolled against the shared contract — one
-// registration point so the wiring is auditable in a single file.
+// Main-side IPC registration, split by lifetime:
+//   - GLOBAL handlers (session, config, audio resolve, windows/pop-outs) are
+//     registered once at app ready and live for the whole run — every window,
+//     including pop-outs, calls them, so they must outlive any single window.
+//   - FR24 handlers are the ONLY per-main-window listeners (the FR24 view belongs
+//     to the main window); they are disposed on that window's close.
+// Both narrow untrusted renderer payloads before acting on them.
 
 const NAV_ACTIONS: readonly Fr24NavAction[] = ['back', 'forward', 'reload', 'home']
 
@@ -24,39 +38,72 @@ function isBounds(value: unknown): value is Fr24Bounds {
   )
 }
 
+/** Narrow to WindowBoundsState (four finite numbers + a numeric/null displayId). */
+function isWindowBounds(value: unknown): value is WindowBoundsState {
+  if (typeof value !== 'object' || value === null) return false
+  const b = value as Record<string, unknown>
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+  return (
+    num(b.x) &&
+    num(b.y) &&
+    num(b.width) &&
+    num(b.height) &&
+    (b.displayId === null || num(b.displayId))
+  )
+}
+
+/** Narrow to VideoLayoutState (a valid mode plus string/null feed ids). */
+function isVideoLayout(value: unknown): value is VideoLayoutState {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  const idOrNull = (x: unknown): boolean => x === null || typeof x === 'string'
+  return (
+    (v.mode === 'uniform' || v.mode === 'emphasized') &&
+    idOrNull(v.emphasizedFeedId) &&
+    idOrNull(v.fillPanelFeedId)
+  )
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === 'string')
+}
+
+/** Narrow an untrusted openPopout request; null when the shape is wrong. */
+function narrowOpenPopoutRequest(value: unknown): OpenPopoutRequest | null {
+  if (typeof value !== 'object' || value === null) return null
+  const v = value as Record<string, unknown>
+  if (!isStringArray(v.feedIds) || !isVideoLayout(v.layout)) return null
+  const request: OpenPopoutRequest = { feedIds: v.feedIds, layout: v.layout }
+  if (isWindowBounds(v.bounds)) request.bounds = v.bounds
+  return request
+}
+
+/** Narrow a pop-out renderer's persist patch to the fields it is allowed to set. */
+function narrowPopoutPatch(value: unknown): PopoutPatch | null {
+  if (typeof value !== 'object' || value === null) return null
+  const v = value as Record<string, unknown>
+  const patch: PopoutPatch = {}
+  if (v.video !== undefined) {
+    if (!isVideoLayout(v.video)) return null
+    patch.video = v.video
+  }
+  if (v.volumes !== undefined) {
+    if (typeof v.volumes !== 'object' || v.volumes === null) return null
+    patch.volumes = v.volumes as PopoutPatch['volumes']
+  }
+  if (v.feedIds !== undefined) {
+    if (!isStringArray(v.feedIds)) return null
+    patch.feedIds = v.feedIds
+  }
+  return patch
+}
+
 /**
- * Wire every Phase 1 channel to the controller / session store. Returns a
- * disposer that removes the handlers again (so a window re-create never stacks
- * duplicate listeners).
+ * Register the app-global IPC handlers (session, config, audio resolve, windows).
+ * Called once at app ready. Returns a disposer (used only on full teardown).
  */
-export function registerIpc(fr24: Fr24Controller): () => void {
-  ipcMain.on(IpcChannels.fr24SetBounds, (_e, bounds: unknown) => {
-    if (!isBounds(bounds)) {
-      console.warn('[ipc] fr24:setBounds ignored — malformed bounds payload:', bounds)
-      return
-    }
-    fr24.setBounds(bounds)
-  })
-
-  ipcMain.on(IpcChannels.fr24Nav, (_e, action: unknown) => {
-    if (typeof action !== 'string' || !NAV_ACTIONS.includes(action as Fr24NavAction)) {
-      console.warn('[ipc] fr24:nav ignored — unknown action:', action)
-      return
-    }
-    fr24.nav(action as Fr24NavAction)
-  })
-
-  ipcMain.on(IpcChannels.fr24SetVisible, (_e, visible: unknown) => {
-    if (typeof visible !== 'boolean') {
-      console.warn('[ipc] fr24:setVisible ignored — non-boolean payload:', visible)
-      return
-    }
-    fr24.setVisible(visible)
-  })
-
-  ipcMain.handle(IpcChannels.sessionGet, () => {
-    return getSessionState()
-  })
+export function registerGlobalIpc(popouts: PopoutManager): () => void {
+  ipcMain.handle(IpcChannels.sessionGet, () => getSessionState())
 
   ipcMain.on(IpcChannels.sessionPatch, (_e, patch: unknown) => {
     if (typeof patch !== 'object' || patch === null) {
@@ -111,14 +158,81 @@ export function registerIpc(fr24: Fr24Controller): () => void {
     }
   )
 
+  // --- Pop-out windows (Phase 4) ------------------------------------------
+  ipcMain.handle(IpcChannels.windowsOpenPopout, (_e, request: unknown): number => {
+    const narrowed = narrowOpenPopoutRequest(request)
+    if (!narrowed) {
+      console.warn('[ipc] windows:openPopout ignored — malformed request:', request)
+      return -1
+    }
+    return popouts.openPopout(narrowed)
+  })
+
+  ipcMain.on(IpcChannels.windowsClosePopout, (_e, id: unknown) => {
+    if (typeof id !== 'number') {
+      console.warn('[ipc] windows:closePopout ignored — non-numeric id:', id)
+      return
+    }
+    popouts.closePopout(id)
+  })
+
+  ipcMain.on(IpcChannels.windowsPatchPopout, (_e, id: unknown, patch: unknown) => {
+    if (typeof id !== 'number') {
+      console.warn('[ipc] windows:patchPopout ignored — non-numeric id:', id)
+      return
+    }
+    const narrowed = narrowPopoutPatch(patch)
+    if (!narrowed) {
+      console.warn('[ipc] windows:patchPopout ignored — malformed patch:', patch)
+      return
+    }
+    popouts.patchPopout(id, narrowed)
+  })
+
   return () => {
-    ipcMain.removeAllListeners(IpcChannels.fr24SetBounds)
-    ipcMain.removeAllListeners(IpcChannels.fr24Nav)
-    ipcMain.removeAllListeners(IpcChannels.fr24SetVisible)
     ipcMain.removeHandler(IpcChannels.sessionGet)
     ipcMain.removeAllListeners(IpcChannels.sessionPatch)
     ipcMain.removeHandler(IpcChannels.configGet)
     ipcMain.removeHandler(IpcChannels.configReload)
     ipcMain.removeHandler(IpcChannels.audioResolveStream)
+    ipcMain.removeHandler(IpcChannels.windowsOpenPopout)
+    ipcMain.removeAllListeners(IpcChannels.windowsClosePopout)
+    ipcMain.removeAllListeners(IpcChannels.windowsPatchPopout)
+  }
+}
+
+/**
+ * Register the FR24 view channels for one main window. Returns a disposer that
+ * removes them again so a window re-create never stacks duplicate listeners.
+ */
+export function registerFr24Ipc(fr24: Fr24Controller): () => void {
+  ipcMain.on(IpcChannels.fr24SetBounds, (_e, bounds: unknown) => {
+    if (!isBounds(bounds)) {
+      console.warn('[ipc] fr24:setBounds ignored — malformed bounds payload:', bounds)
+      return
+    }
+    fr24.setBounds(bounds)
+  })
+
+  ipcMain.on(IpcChannels.fr24Nav, (_e, action: unknown) => {
+    if (typeof action !== 'string' || !NAV_ACTIONS.includes(action as Fr24NavAction)) {
+      console.warn('[ipc] fr24:nav ignored — unknown action:', action)
+      return
+    }
+    fr24.nav(action as Fr24NavAction)
+  })
+
+  ipcMain.on(IpcChannels.fr24SetVisible, (_e, visible: unknown) => {
+    if (typeof visible !== 'boolean') {
+      console.warn('[ipc] fr24:setVisible ignored — non-boolean payload:', visible)
+      return
+    }
+    fr24.setVisible(visible)
+  })
+
+  return () => {
+    ipcMain.removeAllListeners(IpcChannels.fr24SetBounds)
+    ipcMain.removeAllListeners(IpcChannels.fr24Nav)
+    ipcMain.removeAllListeners(IpcChannels.fr24SetVisible)
   }
 }
