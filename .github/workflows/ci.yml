@@ -102,8 +102,14 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
-      # Electron needs an X server on headless Linux; xvfb-run provides one.
-      # `just e2e` builds the app first, then runs the Playwright smoke.
+      # The Playwright config never builds (see playwright.config.ts); the e2e
+      # specs launch out/main/index.js, so the bundles must exist first. This is
+      # exactly what `just e2e` does locally: build, then run the smoke.
+      - name: Build the app
+        run: npm run build
+      # Electron needs an X server on headless Linux; xvfb-run provides one. The
+      # suite points FR24 at about:blank internally, so it never touches the
+      # network.
       - name: Run e2e under xvfb
         run: xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' npm run e2e
 

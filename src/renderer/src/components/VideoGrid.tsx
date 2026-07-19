@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '../state/store'
 import { defaultFeeds } from '../youtube/defaultFeeds'
 import { computeVideoLayout } from '../youtube/layout'
@@ -19,10 +19,24 @@ function VideoGrid(): React.JSX.Element {
   const toggleEmphasizedFeed = useAppStore((s) => s.toggleEmphasizedFeed)
   const setFillPanelFeedId = useAppStore((s) => s.setFillPanelFeedId)
   const exitFillPanel = useAppStore((s) => s.exitFillPanel)
+  const poppedOutFeedIds = useAppStore((s) => s.poppedOutFeedIds)
 
   // Config-file-driven feeds are a later phase; the curated default list is
-  // the Phase 3 stand-in (see youtube/defaultFeeds.ts header).
-  const feeds = defaultFeeds
+  // the Phase 3 stand-in (see youtube/defaultFeeds.ts header). Feeds carried into
+  // an open pop-out drop out of the main grid (their management moved there) and
+  // reappear when that pop-out closes.
+  const feeds = useMemo(
+    () => defaultFeeds.filter((f) => !poppedOutFeedIds.includes(f.id)),
+    [poppedOutFeedIds]
+  )
+
+  // Pop a single feed into its own grid-only window on a second monitor.
+  const popOut = useCallback((feedId: string): void => {
+    void window.api.windows.openPopout({
+      feedIds: [feedId],
+      layout: { mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null }
+    })
+  }, [])
 
   const emphasizedIndex = useMemo(() => {
     if (emphasizedFeedId == null) return null
@@ -82,6 +96,7 @@ function VideoGrid(): React.JSX.Element {
           filled={false}
           onToggleEmphasize={() => toggleEmphasizedFeed(feed.id)}
           onFillPanel={() => setFillPanelFeedId(feed.id)}
+          onPopOut={() => popOut(feed.id)}
         />
       ))}
     </div>

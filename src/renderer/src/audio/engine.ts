@@ -12,8 +12,10 @@ import {
   DEFAULT_DEVICE_LABEL
 } from './devices'
 import type { AudioDeviceSelection } from '@shared/ipc'
+import type { StreamConfig } from '@shared/defaultConfig'
 import { useAppStore } from '../state/store'
 import type { AudioStreamUi, AudioStreamStatus } from '../state/store'
+import { sessionSnapshot } from '../state/sessionBootstrap'
 
 // The audio engine — a plain-TS singleton that owns the StreamPlayers and the
 // ONE shared 50 ms tick. It lives for the life of the window (the audio
@@ -102,15 +104,28 @@ class AudioEngine {
     this.duckTauS = config.ducking.duckTauS
     this.releaseTauS = config.ducking.releaseTauS
 
+    // Per-stream volume/mute/pan restore (Phase 4): the session (loaded before
+    // mount, read synchronously here) overrides the config defaults. Priority is
+    // NOT restored — config.json stays its tuning surface — so it comes from
+    // config every launch. Seed the player via an effective config so its initial
+    // gain/pan are correct from the first sample (no restore flash on the light).
+    const savedStreams = sessionSnapshot().audio.streams
+
     for (const stream of config.streams) {
+      const saved = savedStreams[stream.id]
+      const volume = clamp01(saved?.volume ?? stream.defaultVolume)
+      const muted = saved?.muted ?? stream.muted
+      const pan = clampPan(saved?.pan ?? stream.pan)
+      const effective: StreamConfig = { ...stream, defaultVolume: volume, muted, pan }
+
       this.vads.set(stream.id, new Vad(config.vad))
       this.lastActive.set(stream.id, false)
       this.priorities.set(stream.id, stream.priority)
-      this.mutedState.set(stream.id, stream.muted)
+      this.mutedState.set(stream.id, muted)
       this.duckTargets.set(stream.id, 1)
 
       const player = new StreamPlayer({
-        stream,
+        stream: effective,
         fftSize: config.vad.fftSize,
         resolve: (id, opts) => window.api.audio.resolveStream(id, opts),
         onStatus: (status) => this.onPlayerStatus(stream.id, status),
@@ -125,9 +140,9 @@ class AudioEngine {
         status: 'connecting',
         attempt: 0,
         active: false,
-        volume: stream.defaultVolume,
-        muted: stream.muted,
-        pan: stream.pan,
+        volume,
+        muted,
+        pan,
         priority: stream.priority,
         lastError: null,
         nextRetryAt: null,
@@ -205,21 +220,25 @@ class AudioEngine {
     const v = clamp01(volume)
     this.players.get(id)?.setVolume(v)
     useAppStore.getState().patchAudioStream(id, { volume: v })
+    // Persisted (debounced by the session store) so the mix survives a relaunch.
+    window.api.session.patch({ audio: { streams: { [id]: { volume: v } } } })
   }
 
   setMuted(id: string, muted: boolean): void {
     this.players.get(id)?.setMuted(muted)
     this.mutedState.set(id, muted)
     useAppStore.getState().patchAudioStream(id, { muted })
+    window.api.session.patch({ audio: { streams: { [id]: { muted } } } })
     // A stream that just muted stops ducking others; one that just unmuted may
     // start. Recompute so the mix reflects the new set of active DUCKERS.
     this.recomputeDucking()
   }
 
   setPan(id: string, pan: number): void {
-    const p = Math.max(-1, Math.min(1, pan))
+    const p = clampPan(pan)
     this.players.get(id)?.setPan(p)
     useAppStore.getState().patchAudioStream(id, { pan: p })
+    window.api.session.patch({ audio: { streams: { [id]: { pan: p } } } })
   }
 
   // --- Solo + ducking -----------------------------------------------------
@@ -434,6 +453,15 @@ class AudioEngine {
         muted: stream.muted,
         pan: stream.pan
       })
+      // Reload resets the live mix to config, so re-persist it — session always
+      // mirrors the live state, and a relaunch reproduces what is on screen now.
+      window.api.session.patch({
+        audio: {
+          streams: {
+            [stream.id]: { volume: stream.defaultVolume, muted: stream.muted, pan: stream.pan }
+          }
+        }
+      })
     }
 
     // Priorities / mutes / duck level may all have changed — re-derive the mix.
@@ -479,4 +507,8 @@ export const audioEngine = new AudioEngine()
 
 function clamp01(v: number): number {
   return Math.min(1, Math.max(0, v))
+}
+
+function clampPan(v: number): number {
+  return Math.max(-1, Math.min(1, v))
 }

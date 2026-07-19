@@ -111,6 +111,16 @@ export interface AppState {
   setWeatherResult: (result: WeatherResult) => void
   /** Toggle the in-flight flag around a get/refresh call. */
   setWeatherLoading: (loading: boolean) => void
+
+  // --- Pop-out feed hand-off (Phase 4) ------------------------------------
+  /**
+   * Feed ids currently managed by an open pop-out window. The main grid hides
+   * these tiles (their management moved to the pop-out) and shows them again when
+   * the pop-out closes. Mirrored from the main-process windows:popoutsChanged push.
+   */
+  poppedOutFeedIds: string[]
+  /** Replace the popped-out feed set (from the popouts-changed broadcast). */
+  setPoppedOutFeedIds: (feedIds: string[]) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -162,7 +172,10 @@ export const useAppStore = create<AppState>((set) => ({
         ? { weatherSnapshot: result.snapshot, weatherError: null }
         : { weatherSnapshot: result.stale ?? state.weatherSnapshot, weatherError: result.error }
     ),
-  setWeatherLoading: (weatherLoading) => set({ weatherLoading })
+  setWeatherLoading: (weatherLoading) => set({ weatherLoading }),
+
+  poppedOutFeedIds: [],
+  setPoppedOutFeedIds: (poppedOutFeedIds) => set({ poppedOutFeedIds })
 }))
 
 /**

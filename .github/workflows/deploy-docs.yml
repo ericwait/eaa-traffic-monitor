@@ -1,0 +1,79 @@
+name: Deploy docs site
+
+# Builds the MkDocs Material site from docs/ and publishes it to GitHub Pages
+# through Actions (Phase 5). This REPLACES the legacy branch build (Jekyll
+# serving main:/docs), which served LFS pointer files instead of images and had
+# no MkDocs to render the Material pages. The one manual step this cannot do —
+# flipping Settings → Pages → Source to "GitHub Actions" — is written up in
+# docs/development/Pages-deployment-runbook.md.
+#
+# Runs on pushes to the default branch that touch the docs or their machinery,
+# and on demand. Every push to the default branch republishes the site (the
+# Phase 5 exit criterion).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+
+# Pages deploys need to write the Pages artifact and mint an OIDC token; the
+# checkout only needs to read the repo. Least privilege per job below.
+permissions:
+  contents: read
+
+# One Pages deployment at a time. Do NOT cancel an in-flight deploy — a
+# half-finished Pages publish is worse than waiting — so queue instead.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site (MkDocs Material, strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # LFS-aware: pull the real PNG/JPG/ICO binaries, not their pointer
+          # files, so images render on the published site. This is the whole
+          # reason the branch build is being retired.
+          lfs: true
+
+      # Install a pinned uv the same way the workflow-lint job installs
+      # actionlint: fetch the versioned, checksummed installer directly rather
+      # than adding a marketplace action to the supply chain. uv then provisions
+      # Python and the docs dependencies from website/uv.lock.
+      - name: Install uv (pinned)
+        run: |
+          curl -LsSf https://astral.sh/uv/0.11.29/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # --frozen: build against the committed lockfile exactly; fail rather than
+      # silently resolve new versions. Output goes to website/site (site_dir).
+      - name: Build the docs site
+        working-directory: website
+        run: uv run --frozen mkdocs build --strict
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    # Only the deploy job needs the elevated Pages permissions.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
