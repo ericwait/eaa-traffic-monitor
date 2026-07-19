@@ -106,6 +106,19 @@ describe('sanitizeSessionState', () => {
     expect(s.video).toEqual({ mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null })
   })
 
+  it('keeps a boolean connected flag (on-demand set) and drops a non-boolean one', () => {
+    const s = sanitizeSessionState({
+      audio: {
+        streams: {
+          tower: { connected: true, volume: 0.5 },
+          gnd: { connected: 'yes' } // wrong type → field dropped, object kept
+        }
+      }
+    })
+    expect(s.audio.streams.tower).toEqual({ connected: true, volume: 0.5 })
+    expect(s.audio.streams.gnd).toEqual({})
+  })
+
   it('nulls a window with a non-finite dimension rather than restoring garbage', () => {
     const s = sanitizeSessionState({ window: { x: 0, y: 0, width: Infinity, height: 600 } })
     expect(s.window).toBeNull()
@@ -143,6 +156,17 @@ describe('applySessionPatch', () => {
     expect(state.audio.streams.tower).toEqual({ volume: 0.4, muted: true })
     state = applySessionPatch(state, { audio: { streams: { tower: null } } })
     expect(state.audio.streams.tower).toBeUndefined()
+  })
+
+  it('merges the connected flag beside volume/mute/pan and toggles it in place', () => {
+    let state = defaultSessionState()
+    // Connect persists connected:true without disturbing an existing volume.
+    state = applySessionPatch(state, { audio: { streams: { tower: { volume: 0.7 } } } })
+    state = applySessionPatch(state, { audio: { streams: { tower: { connected: true } } } })
+    expect(state.audio.streams.tower).toEqual({ volume: 0.7, connected: true })
+    // Disconnect flips only the flag; the arranged volume survives.
+    state = applySessionPatch(state, { audio: { streams: { tower: { connected: false } } } })
+    expect(state.audio.streams.tower).toEqual({ volume: 0.7, connected: false })
   })
 
   it('replaces window bounds and clears them with null', () => {

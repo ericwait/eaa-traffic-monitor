@@ -16,16 +16,25 @@ import { DEFAULT_DEVICE_ID, DEFAULT_DEVICE_LABEL } from './devices'
 // Phase 2b adds solo (a momentary manual override), the priority-rank badge, the
 // per-stream output-device picker, and a dev-only duck-target readout so ducking
 // can be SEEN without being heard.
+//
+// On-demand connection (decision 2026-07-19): the status pill is ALSO the connect
+// toggle. Streams start disconnected; clicking the pill connects a disconnected
+// stream and disconnects any active one. It is a real <button> so it is keyboard-
+// operable, with a cursor/hover affordance and a "Click to connect" tooltip.
 
-/** Human text for the status chip. */
+/** Human text for the status pill. */
 function chipLabel(status: AudioStreamStatus, attempt: number): string {
   switch (status) {
     case 'live':
       return 'Live'
     case 'reconnecting':
       return `Reconnecting · ${attempt}`
+    case 'feed-down':
+      return 'Feed down · retrying'
     case 'error':
       return 'Error'
+    case 'disconnected':
+      return 'Disconnected'
     default:
       return 'Connecting…'
   }
@@ -36,8 +45,9 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
   const soloedId = useAppStore((s) => s.audioSolo)
   const outputs = useAppStore((s) => s.audioOutputs)
 
-  // Live countdown to the next retry — ticks only while actually reconnecting,
-  // so idle strips never re-render on a timer.
+  // Live countdown to the next retry — ticks only while actively reconnecting on
+  // the fast schedule, so idle/disconnected strips never re-render on a timer.
+  // 'feed-down' deliberately shows no live countdown: it is the calm state.
   const [now, setNow] = useState(() => Date.now())
   const isRetrying = stream?.status === 'reconnecting' || stream?.status === 'error'
   const nextRetryAt = stream?.nextRetryAt ?? null
@@ -69,20 +79,30 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
 
   const countdown = nextRetryAt != null ? Math.max(0, Math.ceil((nextRetryAt - now) / 1000)) : null
 
-  // The status-chip tooltip is the 6-a.m.-at-the-airshow message: what failed,
-  // and what happens next.
+  // The status-pill tooltip is the 6-a.m.-at-the-airshow message: what state the
+  // stream is in and what a click will do (the pill is the connect toggle).
   let chipTooltip: string
-  if (status === 'live') {
-    chipTooltip = 'Stream healthy'
+  if (status === 'disconnected') {
+    chipTooltip = 'Click to connect'
+  } else if (status === 'live') {
+    chipTooltip = 'Stream healthy — click to disconnect'
   } else if (status === 'connecting') {
-    chipTooltip = 'Connecting to the stream…'
+    chipTooltip = 'Connecting to the stream… — click to disconnect'
+  } else if (status === 'feed-down') {
+    const base = lastError ?? 'this feed is not broadcasting'
+    chipTooltip = `${base} — still retrying about once a minute; click to disconnect`
   } else {
     const base = lastError ?? 'connection lost'
-    chipTooltip =
+    const detail =
       countdown != null
         ? `${base} — next try in ${countdown}s (attempt ${attempt})`
         : `${base} (attempt ${attempt})`
+    chipTooltip = `${detail}; click to disconnect`
   }
+
+  // The pill's accessible name is the ACTION it performs, so a screen-reader user
+  // hears "Connect Tower" / "Disconnect Tower", not just the status word.
+  const pillAction = status === 'disconnected' ? `Connect ${label}` : `Disconnect ${label}`
 
   // The picker's <select> value must always match one of its options. When the
   // routed device is the default (or a saved device that isn't present right
@@ -121,14 +141,17 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
         <span className="stream-label" title={label}>
           {label}
         </span>
-        <span
+        <button
+          type="button"
           className="status-chip"
           data-testid={`status-chip-${id}`}
           data-status={status}
+          aria-label={pillAction}
           title={chipTooltip}
+          onClick={() => audioEngine.toggleConnected(id)}
         >
           {chipLabel(status, attempt)}
-        </span>
+        </button>
       </div>
 
       <div className="stream-strip-controls">

@@ -4,6 +4,7 @@ import { StreamPlayer } from './streamPlayer'
 import type { StreamPlayerState, StreamPlayerStatus } from './streamPlayer'
 import { computeDuckTargets, chooseDuckTau } from './ducking'
 import type { DuckStreamState } from './ducking'
+import { isFeedDown } from './backoff'
 import {
   enumerateOutputs,
   onDeviceChange,
@@ -29,17 +30,23 @@ import { sessionSnapshot } from '../state/sessionBootstrap'
 // The tick is setInterval, never requestAnimationFrame (rAF freezes when the
 // window is hidden; backgroundThrottling is off on the main window).
 
-/** Map the player's internal state to the coarser UI status chip. */
-function toStatus(state: StreamPlayerState): AudioStreamStatus {
+/**
+ * Map the player's internal state (+ consecutive-failure count) to the UI status
+ * pill. A reconnecting stream that has failed enough times reads as the calmer
+ * 'feed-down' rather than an ever-climbing 'reconnecting · n' (decision 2026-07-19).
+ */
+function toStatus(state: StreamPlayerState, attempt: number): AudioStreamStatus {
   switch (state) {
+    case 'disconnected':
+      return 'disconnected'
     case 'live':
       return 'live'
-    case 'reconnecting':
-      return 'reconnecting'
     case 'error':
       return 'error'
+    case 'reconnecting':
+      return isFeedDown(attempt) ? 'feed-down' : 'reconnecting'
     default:
-      // idle / resolving / connecting all read as "connecting" on the chip.
+      // connecting reads as "connecting" on the pill.
       return 'connecting'
   }
 }
@@ -52,6 +59,16 @@ class AudioEngine {
   private tickTimer: ReturnType<typeof setInterval> | null = null
   private gestureAttached = false
   private lastNeedsGesture: boolean | null = null
+
+  // --- On-demand connection (decision 2026-07-19) -------------------------
+  /**
+   * Timers for the staggered restore of the saved-connected set. Held so a manual
+   * connect/disconnect during the stagger window can cancel any still-pending
+   * restore for that stream (we never fight the operator's live choice).
+   */
+  private readonly restoreTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** Gap between staggered restore connects — be polite to LiveATC, never fire N at once. */
+  private restoreStaggerMs = 750
 
   // --- Ducking + solo (Phase 2b) ------------------------------------------
   /** Priority rank per stream (from config); lower = higher priority. */
@@ -137,7 +154,7 @@ class AudioEngine {
       uiList.push({
         id: stream.id,
         label: stream.label,
-        status: 'connecting',
+        status: 'disconnected',
         attempt: 0,
         active: false,
         volume,
@@ -157,7 +174,16 @@ class AudioEngine {
     store.initAudioStreams(uiList)
     store.setAudioBanner(this.bannerFor(result))
 
-    for (const player of this.players.values()) player.start()
+    // On-demand connection (decision 2026-07-19): streams start DISCONNECTED and
+    // do nothing until connected. Restore the operator's saved-connected set,
+    // STAGGERED so we never fire N simultaneous connects at LiveATC. First run /
+    // no saved entry → disconnected. Under e2e we deliberately skip restore so the
+    // smoke starts from a deterministic all-disconnected default regardless of any
+    // session.json on the box.
+    if (!isE2E) {
+      const wanted = config.streams.filter((s) => savedStreams[s.id]?.connected === true)
+      this.scheduleRestore(wanted.map((s) => s.id))
+    }
 
     // One shared 50 ms tick for every stream's VAD. Guard against a stray
     // double-build leaving two intervals running.
@@ -190,11 +216,13 @@ class AudioEngine {
     // per stream, so a burst of simultaneous key-ups is a single pass.
     if (vadChanged) this.recomputeDucking()
 
-    // "Click to enable audio" hint tracks whether any context is autoplay-
-    // suspended. Written only on change so the tick stays store-write-quiet.
+    // "Click to enable audio" hint tracks whether any WANTED (connected) stream's
+    // context is autoplay-suspended. Disconnected streams never trigger the hint —
+    // their contexts idle suspended by design, and nagging about audio nobody
+    // asked for would be noise. Written only on change so the tick stays quiet.
     let anySuspended = false
     for (const player of this.players.values()) {
-      if (player.suspended) {
+      if (player.connectionWanted && player.suspended) {
         anySuspended = true
         break
       }
@@ -207,11 +235,81 @@ class AudioEngine {
 
   private onPlayerStatus(id: string, status: StreamPlayerStatus): void {
     useAppStore.getState().patchAudioStream(id, {
-      status: toStatus(status.state),
+      status: toStatus(status.state, status.attempt),
       attempt: status.attempt,
       lastError: status.error,
       nextRetryAt: status.nextRetryAt
     })
+  }
+
+  // --- On-demand connection (decision 2026-07-19) -------------------------
+
+  /**
+   * Toggle a stream between connected and disconnected — the status-pill click.
+   * A disconnected stream connects (fresh resolve + play); any live/connecting/
+   * reconnecting/feed-down/error stream disconnects and cancels its retry timer.
+   */
+  toggleConnected(id: string): void {
+    const player = this.players.get(id)
+    if (!player) return
+    if (player.connectionWanted) this.disconnect(id)
+    else this.connect(id)
+  }
+
+  /** Connect a stream on demand and persist that it is wanted. */
+  connect(id: string): void {
+    const player = this.players.get(id)
+    if (!player) return
+    // A manual connect cancels any pending staggered restore for this stream so
+    // the restore callback doesn't later fight (or double-fire) the live choice.
+    this.cancelRestore(id)
+    player.connect()
+    window.api.session.patch({ audio: { streams: { [id]: { connected: true } } } })
+  }
+
+  /** Disconnect a stream on demand and persist that it is no longer wanted. */
+  disconnect(id: string): void {
+    const player = this.players.get(id)
+    if (!player) return
+    this.cancelRestore(id)
+    player.disconnect()
+    // Clear the activity light at once: a disconnected stream isn't talking, and
+    // resetting the VAD stops a mid-hang light from flickering back on next tick.
+    this.vads.get(id)?.reset()
+    if (this.lastActive.get(id)) {
+      this.lastActive.set(id, false)
+      useAppStore.getState().patchAudioStream(id, { active: false })
+    }
+    window.api.session.patch({ audio: { streams: { [id]: { connected: false } } } })
+    // A disconnected stream is silent and no longer a ducker — refresh the mix.
+    this.recomputeDucking()
+  }
+
+  /**
+   * Restore the saved-connected set, staggered ~750 ms apart so a batch of feeds
+   * never hits LiveATC simultaneously. Each connect is guarded: if the operator
+   * has already acted on that stream during the stagger window, its restore is a
+   * no-op.
+   */
+  private scheduleRestore(ids: string[]): void {
+    ids.forEach((id, index) => {
+      const timer = setTimeout(() => {
+        this.restoreTimers.delete(id)
+        const player = this.players.get(id)
+        // Don't override a live operator choice made during the stagger window.
+        if (player && !player.connectionWanted) this.connect(id)
+      }, index * this.restoreStaggerMs)
+      this.restoreTimers.set(id, timer)
+    })
+  }
+
+  /** Cancel a pending staggered-restore connect for one stream (no-op if none). */
+  private cancelRestore(id: string): void {
+    const timer = this.restoreTimers.get(id)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      this.restoreTimers.delete(id)
+    }
   }
 
   // --- user controls ------------------------------------------------------

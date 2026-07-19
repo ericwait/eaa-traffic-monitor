@@ -117,6 +117,13 @@ export interface AudioStreamSettings {
   muted?: boolean
   /** Stereo pan -1..1. */
   pan?: number
+  /**
+   * Whether the operator had this stream CONNECTED. Streams are on-demand
+   * (decision 2026-07-19): they start disconnected and connect only when clicked,
+   * so this restores the "arranged once" connected set on the next launch (absent
+   * or false = disconnected). The engine staggers the restored connects.
+   */
+  connected?: boolean
 }
 
 /** Window bounds in global (multi-display) DIP plus the display last occupied. */
