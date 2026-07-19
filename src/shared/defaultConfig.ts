@@ -61,12 +61,21 @@ export const vadSchema = z.object({
 })
 
 /**
- * Priority-ducking parameters. Parked for Phase 2b — the duck gain node exists
- * in the graph now (fixed at 1.0), and 2b wires this value into it.
+ * Priority-ducking parameters (Phase 2b). The duck-gain node in each stream's
+ * graph is driven to `duckLevel` when a strictly-higher-priority stream is
+ * active, then released back to 1.0 — with ASYMMETRIC ramps: a fast duck so a
+ * priority call's opening syllables aren't buried, and a slow release so a
+ * channel easing back up doesn't pump. The τ (time-constant) values feed
+ * `AudioParam.setTargetAtTime`; all three are tunable at the show. `.default()`s
+ * keep a Phase-2a config.json (which had only `duckLevel`) valid after upgrade.
  */
 export const duckingSchema = z.object({
   /** Ducked target gain (0.25 ≈ −12 dB). */
-  duckLevel: z.number().min(0).max(1)
+  duckLevel: z.number().min(0).max(1),
+  /** Fast duck ramp time-constant, seconds (setTargetAtTime τ). */
+  duckTauS: z.number().positive().default(0.05),
+  /** Slow release ramp time-constant, seconds (setTargetAtTime τ). */
+  releaseTauS: z.number().positive().default(0.2)
 })
 
 /** The whole config file. Unknown top-level keys are stripped, not rejected. */
@@ -139,7 +148,9 @@ export const DEFAULT_CONFIG: AppConfig = {
     hangMs: 700
   },
   ducking: {
-    duckLevel: 0.25
+    duckLevel: 0.25,
+    duckTauS: 0.05,
+    releaseTauS: 0.2
   }
 }
 
