@@ -1,5 +1,16 @@
 import type { StreamConfig } from '@shared/defaultConfig'
 import type { ResolveFailureKind, ResolveStreamResult } from '@shared/ipc'
+import { DEFAULT_DEVICE_ID } from './devices'
+
+/** The AudioContext.setSinkId shape — typed locally since lib.dom lags Chromium. */
+type SinkCapableContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> }
+
+/** The outcome of a per-stream output-device route change. */
+export interface SetOutputResult {
+  ok: boolean
+  /** A 6-a.m.-actionable message when ok is false. */
+  error?: string
+}
 
 // One ATC stream's audio unit: its own AudioContext, an <audio> element, the
 // Web Audio graph, and the reconnect state machine. No React, no store — it
@@ -86,6 +97,17 @@ export class StreamPlayer {
   private volume: number
   private muted: boolean
   private pan: number
+
+  // Priority-ducking (Phase 2b). duckGain rides at 1.0 (no duck) and is driven to
+  // config.ducking.duckLevel when a strictly-higher stream is active; the engine
+  // computes the target + ramp τ and calls setDuckTarget. `duckTarget` mirrors the
+  // last commanded value for the dev duck-telemetry readout.
+  private duckTarget = 1
+  // Solo momentarily overrides mute (design: solo overrides everything, mutes
+  // included): while soloOverride is on, the user-gain uses volume even if muted.
+  private soloOverride = false
+  /** The currently-routed output device id ('' = system default). */
+  private outputDeviceId: string = DEFAULT_DEVICE_ID
 
   private intendedPlaying = false
   private unlocked = false
@@ -193,6 +215,72 @@ export class StreamPlayer {
   setPan(pan: number): void {
     this.pan = Math.max(-1, Math.min(1, pan))
     this.setParam(this.panner.pan, this.pan)
+  }
+
+  /**
+   * Drive the duck gain toward `target` (0..1) with the given ramp time-constant.
+   * setTargetAtTime departs from the CURRENT value, so no cancel/dance is needed;
+   * the engine picks the τ (fast to duck, slow to release). Idempotent on the
+   * value, but always re-issues so a ramp interrupted mid-flight resumes cleanly.
+   */
+  setDuckTarget(target: number, tauS: number): void {
+    this.duckTarget = target
+    this.setParam(this.duckGain.gain, target, tauS)
+  }
+
+  /** The last commanded duck target (dev telemetry / verification readout). */
+  get duckTargetValue(): number {
+    return this.duckTarget
+  }
+
+  /**
+   * Solo momentarily overrides mute. While active the user-gain uses the slider
+   * volume even if the stream is muted (design: solo overrides everything). The
+   * user's mute intent is untouched — it re-applies the instant solo releases.
+   */
+  setSoloOverride(active: boolean): void {
+    if (this.soloOverride === active) return
+    this.soloOverride = active
+    this.applyGain()
+  }
+
+  /**
+   * Route this stream's audio to a specific output device via the context's
+   * setSinkId ('' = system default). The 2026-07-19 spike confirmed
+   * AudioContext.setSinkId works in this Electron, so this is the primary path;
+   * see the graceful degrade below for the (unexpected) absent case.
+   */
+  async setOutputDevice(deviceId: string): Promise<SetOutputResult> {
+    this.outputDeviceId = deviceId
+    const ctx = this.ctx as SinkCapableContext
+
+    if (typeof ctx.setSinkId !== 'function') {
+      // Not seen in Electron 43 (spike passed). The documented pivot per the plan
+      // is a per-stream MediaStreamAudioDestinationNode -> hidden <audio>.setSinkId,
+      // confined to this file. It is intentionally NOT built: the spike proved the
+      // context path works, so building the unused pivot would be dead weight. If a
+      // future Electron drops context.setSinkId, that pivot lands here. For now we
+      // degrade to the default output and say so, rather than pretending to route.
+      const error =
+        'this build cannot route audio to a specific output device ' +
+        '(AudioContext.setSinkId unavailable); staying on the system default'
+      console.error(`[audio:${this.id}] ${error}`)
+      return { ok: false, error }
+    }
+
+    try {
+      await ctx.setSinkId(deviceId)
+      return { ok: true }
+    } catch (err: unknown) {
+      const error = `could not route "${this.id}" to the selected output: ${errMessage(err)}`
+      console.error(`[audio:${this.id}] setSinkId("${deviceId}") failed:`, err)
+      return { ok: false, error }
+    }
+  }
+
+  /** The currently-routed output device id ('' = system default). */
+  get outputDevice(): string {
+    return this.outputDeviceId
   }
 
   // --- reads for the engine tick ------------------------------------------
@@ -391,13 +479,21 @@ export class StreamPlayer {
   }
 
   private applyGain(): void {
-    this.setParam(this.userGain.gain, this.muted ? 0 : this.volume)
+    // Solo overrides mute: while soloOverride is on, a muted stream is still
+    // audible at its slider volume. Volume 0 stays silent — solo overrides the
+    // mute gesture, not the volume setting.
+    const effectiveMuted = this.muted && !this.soloOverride
+    this.setParam(this.userGain.gain, effectiveMuted ? 0 : this.volume)
   }
 
-  /** Ramp an AudioParam smoothly to avoid clicks (no-op if the context is dead). */
-  private setParam(param: AudioParam, value: number): void {
+  /**
+   * Ramp an AudioParam smoothly to avoid clicks (no-op if the context is dead).
+   * The default τ (15 ms) suits volume/mute/pan clicks; ducking passes its own
+   * asymmetric τ (fast duck / slow release).
+   */
+  private setParam(param: AudioParam, value: number, tauS = 0.015): void {
     try {
-      param.setTargetAtTime(value, this.ctx.currentTime, 0.015)
+      param.setTargetAtTime(value, this.ctx.currentTime, tauS)
     } catch {
       // Fallback for environments without setTargetAtTime timing support.
       param.value = value
