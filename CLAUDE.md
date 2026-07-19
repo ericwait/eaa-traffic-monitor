@@ -5,7 +5,7 @@ Follow these instructions; they override default behavior.
 
 ## What this app is
 
-A cross-platform Electron desktop dashboard for monitoring EAA AirVenture air traffic — three pillars: simultaneous ATC audio streams, a YouTube live-feed grid, and an embedded FlightRadar24 browser panel.
+A cross-platform Electron desktop dashboard for monitoring airshow air traffic (built first for EAA AirVenture) — three pillars: simultaneous ATC audio streams, a YouTube live-feed grid, and an embedded FlightRadar24 browser panel.
 Stack is locked: Electron + TypeScript (strict) + React, built with electron-vite, packaged with electron-builder — see [docs/development/TechStack.md](docs/development/TechStack.md).
 
 ## Commands

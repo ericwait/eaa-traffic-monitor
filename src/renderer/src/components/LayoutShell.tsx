@@ -44,7 +44,7 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1 className="app-brand">EAA Traffic Monitor</h1>
+        <h1 className="app-brand">Airshow Traffic Monitor</h1>
         <span className="app-badge">Phase 1 · skeleton</span>
         <div className="app-header-spacer" />
         <button

@@ -30,12 +30,12 @@ test.afterAll(async () => {
   await app?.close()
 })
 
-test('launches to a window titled "EAA Traffic Monitor"', async () => {
-  await expect(page).toHaveTitle('EAA Traffic Monitor')
+test('launches to a window titled "Airshow Traffic Monitor"', async () => {
+  await expect(page).toHaveTitle('Airshow Traffic Monitor')
 })
 
 test('mounts the renderer and shows the app heading', async () => {
-  await expect(page.getByRole('heading', { name: 'EAA Traffic Monitor' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Airshow Traffic Monitor' })).toBeVisible()
 })
 
 test('the BrowserWindow reports the expected title from the main process', async () => {
@@ -43,7 +43,7 @@ test('the BrowserWindow reports the expected title from the main process', async
     const win = BrowserWindow.getAllWindows()[0]
     return win?.getTitle()
   })
-  expect(title).toBe('EAA Traffic Monitor')
+  expect(title).toBe('Airshow Traffic Monitor')
 })
 
 test('renders all three panel headings', async () => {

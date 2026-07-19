@@ -2,7 +2,7 @@
 
 # Audio
 
-This document specifies every sound source in EAA Traffic Monitor: the ATC radio streams, the audio that comes with the YouTube video feeds, and the audio the flight-tracker browser panel can make.
+This document specifies every sound source in Airshow Traffic Monitor: the ATC radio streams, the audio that comes with the YouTube video feeds, and the audio the flight-tracker browser panel can make.
 It is written in product terms; where a mechanism is load-bearing it links to [../development/TechStack.md](../development/TechStack.md) rather than naming the machinery here.
 Audio is the app's hardest and most important part — listening to Oshkosh is where monitoring breaks down first, so the audio system is designed around that failure.
 

@@ -5,7 +5,7 @@ import { stripUserAgentTokens } from '@shared/userAgent'
 // a UA that reads as plain Chrome. These lock the transform so a future Electron
 // upgrade (which changes the version tokens) can't silently re-expose us.
 
-const APP = 'eaa-traffic-monitor'
+const APP = 'airshow-traffic-monitor'
 
 // A representative Electron 43 default UA on macOS: note both the app-name
 // product token and the Electron token that must be removed.

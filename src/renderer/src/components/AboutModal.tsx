@@ -34,7 +34,7 @@ function AboutModal({ onClose }: AboutModalProps): React.JSX.Element {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="about-title" className="modal-title">
-          EAA Traffic Monitor
+          Airshow Traffic Monitor
         </h2>
         <p className="modal-body">
           Arrange once, then just watch and listen — the unified AirVenture traffic dashboard.

@@ -2,7 +2,7 @@
 
 # Tracking
 
-Live flight tracking is the third pillar of the EAA Traffic Monitor, alongside ATC audio ([Audio.md](Audio.md)) and the YouTube video grid ([Video.md](Video.md)).
+Live flight tracking is the third pillar of the Airshow Traffic Monitor, alongside ATC audio ([Audio.md](Audio.md)) and the YouTube video grid ([Video.md](Video.md)).
 This document covers why the tracking panel exists, what it does, where it is fragile, and what "working" looks like once it ships.
 
 ## Intent

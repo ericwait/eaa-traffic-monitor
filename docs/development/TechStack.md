@@ -2,7 +2,7 @@
 
 # Tech stack
 
-EAA Traffic Monitor is built as an Electron + TypeScript + React desktop app, not a web app and not a from-scratch native build.
+Airshow Traffic Monitor is built as an Electron + TypeScript + React desktop app, not a web app and not a from-scratch native build.
 Two of the app's three pillars force that call: FlightRadar24 refuses to be embedded in any browser page at all, and per-stream ATC audio needs OS-level output-device routing plus real multi-window support that a browser tab can't provide.
 The whole toolchain — shell, build, state, testing, governance — was locked with the user on 2026-07-18 in one pass, so a usable alpha could ship by the Monday 2026-07-20 show open.
 This document covers what's in the stack, why, what it costs, and what's worth revisiting once the show-week deadline stops driving every call.

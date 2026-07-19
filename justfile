@@ -65,7 +65,7 @@ down:
 reset:
     #!/usr/bin/env bash
     set -euo pipefail
-    userdata="$HOME/Library/Application Support/eaa-traffic-monitor"
+    userdata="$HOME/Library/Application Support/airshow-traffic-monitor"
     echo "This will permanently delete:" >&2
     echo "  - node_modules/ out/ dist/ (rebuilt by 'just dev')" >&2
     echo "  - $userdata (dev config, session, FR24 login)" >&2

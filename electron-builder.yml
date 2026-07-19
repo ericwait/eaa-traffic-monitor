@@ -2,8 +2,8 @@
 # and `--dir` packaging is exercisable; the 3-OS release matrix and the
 # changelog gate arrive with Phase 5 (release.yml). Alpha artifacts are
 # UNSIGNED (CSC_IDENTITY_AUTO_DISCOVERY=false in CI) — no certificate exists yet.
-appId: com.ericwait.eaa-traffic-monitor
-productName: EAA Traffic Monitor
+appId: com.ericwait.airshow-traffic-monitor
+productName: Airshow Traffic Monitor
 directories:
   buildResources: build
   output: dist
