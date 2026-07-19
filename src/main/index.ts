@@ -6,6 +6,7 @@ import { startRendererServer } from './rendererServer'
 import type { RendererServer } from './rendererServer'
 import { Fr24Controller } from './fr24'
 import { registerIpc } from './ipc'
+import { flushSession } from './session'
 
 // ---------------------------------------------------------------------------
 // Privileged custom scheme registration.
@@ -172,8 +173,11 @@ app.on('window-all-closed', () => {
   app.quit()
 })
 
-// Release the loopback renderer server's port on the way out.
+// Flush any debounced session state and release the loopback renderer server's
+// port on the way out. flushSession is synchronous + atomic, so a patch still
+// inside its ~500 ms debounce window (a last-second layout drag) is not lost.
 app.on('will-quit', () => {
+  flushSession()
   rendererServer?.close()
   rendererServer = null
 })

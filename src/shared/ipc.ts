@@ -35,7 +35,15 @@ export const IpcChannels = {
   /** renderer -> main (invoke): re-read config.json from disk (Phase 2a). */
   configReload: 'config:reload',
   /** renderer -> main (invoke): resolve a stream id to a playable URL (Phase 2a). */
-  audioResolveStream: 'audio:resolveStream'
+  audioResolveStream: 'audio:resolveStream',
+  /** renderer(main) -> main (invoke): open a grid-only pop-out; resolves its id (Phase 4). */
+  windowsOpenPopout: 'windows:openPopout',
+  /** renderer(popout) -> main: request this pop-out be closed (Phase 4). */
+  windowsClosePopout: 'windows:closePopout',
+  /** renderer(popout) -> main: persist this pop-out's layout / per-feed volumes (Phase 4). */
+  windowsPatchPopout: 'windows:patchPopout',
+  /** main -> renderer: the set of currently open pop-outs, for feed hand-off (Phase 4). */
+  windowsPopoutsChanged: 'windows:popoutsChanged'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -70,11 +78,14 @@ export interface Fr24NavState {
 }
 
 // ---------------------------------------------------------------------------
-// Session payloads. Phase 1 persisted just the FR24 last URL; Phase 2b adds the
-// per-stream ATC output-device selection (so "Tower on headphones, the rest on
-// speakers" survives a relaunch). Later phases extend `SessionState` further
-// (window bounds, panel layout, per-stream volume/mute/pan, video layout,
-// popouts); `SessionPatch` grows with it. Keep both shapes in lockstep.
+// Session payloads. Phase 1 persisted just the FR24 last URL; Phase 2b added the
+// per-stream ATC output-device selection; Phase 4 completes full session restore
+// (decision 2026-07-19): main-window bounds + its display, the resizable panel
+// layout, per-stream volume/mute/pan, the video layout, and every pop-out window.
+// `SessionPatch` is the shallow, per-section partial the renderer sends over
+// `session:patch`; pop-out slices are mutated main-side (they own the windows)
+// via the `windows:*` channels, so they are deliberately absent from the patch
+// surface. Keep both shapes in lockstep with the pure merge in `shared/session`.
 // ---------------------------------------------------------------------------
 
 /**
@@ -85,6 +96,57 @@ export interface Fr24NavState {
 export interface AudioDeviceSelection {
   deviceId: string
   deviceLabel: string
+}
+
+/**
+ * Runtime-mutable per-stream ATC settings. Priority is intentionally NOT here:
+ * config.json is priority's live tuning surface (see defaultConfig.ts), so it
+ * stays config-owned and is re-derived from config on every launch rather than
+ * pinned in the session (decision 2026-07-19).
+ */
+export interface AudioStreamSettings {
+  /** Slider volume 0..1. */
+  volume?: number
+  muted?: boolean
+  /** Stereo pan -1..1. */
+  pan?: number
+}
+
+/** Window bounds in global (multi-display) DIP plus the display last occupied. */
+export interface WindowBoundsState {
+  x: number
+  y: number
+  width: number
+  height: number
+  /** Electron display id the window was last on; validated against live displays on restore. */
+  displayId: number | null
+}
+
+/** The video grid's cross-tile layout — the shared decisions VideoGrid reacts to. */
+export interface VideoLayoutState {
+  mode: 'uniform' | 'emphasized'
+  /** Feed id in the emphasized "big" tile; null in uniform mode. */
+  emphasizedFeedId: string | null
+  /** Feed id filling the whole panel (grid hidden); null otherwise. */
+  fillPanelFeedId: string | null
+}
+
+/** One YouTube tile's audio state (volume on YouTube's 0..100 scale). */
+export interface FeedAudioState {
+  volume: number
+  muted: boolean
+}
+
+/** One pop-out window's persisted slice — its own bounds/display, feeds, layout, volumes. */
+export interface PopoutState {
+  /** Stable per-session id; also the `?id=` the pop-out renderer loads under. */
+  id: number
+  bounds: WindowBoundsState
+  /** The feeds this pop-out manages (handed off from the main grid while open). */
+  feedIds: string[]
+  video: VideoLayoutState
+  /** Per-feed audio for this pop-out's tiles, keyed by feed id. */
+  volumes: Record<string, FeedAudioState>
 }
 
 export interface SessionState {
@@ -98,10 +160,27 @@ export interface SessionState {
      * map plays on the system default output (the common case).
      */
     devices: Record<string, AudioDeviceSelection>
+    /** Per-stream volume/mute/pan overrides, keyed by stream id (absent = config default). */
+    streams: Record<string, AudioStreamSettings>
   }
+  /** Main-window bounds + display, or null before the first save. */
+  window: WindowBoundsState | null
+  /**
+   * Resizable panel layout, keyed by the react-resizable-panels storage key. The
+   * values are the library's own serialized layout strings — the renderer wires a
+   * `LayoutStorage` adapter over this map, so the app never parses them itself.
+   */
+  layout: Record<string, string>
+  /** The main-window video grid layout. */
+  video: VideoLayoutState
+  /** Every open pop-out window (empty when none). */
+  popouts: PopoutState[]
 }
 
-/** A shallow, per-section partial applied by `session:patch`. */
+/**
+ * A shallow, per-section partial applied by `session:patch`. Pop-outs are absent
+ * on purpose — they are mutated main-side through the `windows:*` channels.
+ */
 export interface SessionPatch {
   fr24?: Partial<SessionState['fr24']>
   audio?: {
@@ -111,8 +190,49 @@ export interface SessionPatch {
      * than storing null — so resetting a route is a first-class patch.
      */
     devices?: Record<string, AudioDeviceSelection | null>
+    /**
+     * Per-stream volume/mute/pan to merge. A `null` value for a stream id CLEARS
+     * its overrides (back to the config defaults).
+     */
+    streams?: Record<string, AudioStreamSettings | null>
   }
+  /** Replace the whole main-window bounds record (or clear it with null). */
+  window?: WindowBoundsState | null
+  /** Merge these panel-layout entries into the stored map. */
+  layout?: Record<string, string>
+  /** Replace the whole main-window video layout. */
+  video?: VideoLayoutState
 }
+
+// ---------------------------------------------------------------------------
+// Pop-out window payloads (Phase 4). The main window asks the main process to
+// open a pop-out; the main process owns the BrowserWindow and its session slice;
+// pop-out renderers persist their own layout / volumes back through `windows:*`.
+// ---------------------------------------------------------------------------
+
+/** The request that opens a pop-out: which feeds, in what layout, optionally where. */
+export interface OpenPopoutRequest {
+  feedIds: string[]
+  layout: VideoLayoutState
+  /** Optional starting bounds (else the main process offsets a default). */
+  bounds?: WindowBoundsState
+}
+
+/** A pop-out renderer's persist patch for its own slice. */
+export interface PopoutPatch {
+  video?: VideoLayoutState
+  volumes?: Record<string, FeedAudioState>
+  feedIds?: string[]
+}
+
+/** The lightweight per-window broadcast so the main grid knows what is handed off. */
+export interface PopoutSummary {
+  id: number
+  feedIds: string[]
+}
+
+/** Which renderer role a window is running as, derived from its launch URL query. */
+export type WindowRole = 'main' | 'popout'
 
 // ---------------------------------------------------------------------------
 // The `window.api` surface the preload exposes via contextBridge. The renderer
@@ -140,12 +260,31 @@ export interface SessionApi {
   patch(patch: SessionPatch): void
 }
 
+export interface WindowsApi {
+  /** (main window) Pop a subset of feeds into their own grid-only window; resolves the new id. */
+  openPopout(request: OpenPopoutRequest): Promise<number>
+  /** (pop-out window) Ask the main process to close this pop-out. */
+  closePopout(id: number): void
+  /** (pop-out window) Persist this pop-out's layout / per-feed volumes. */
+  patchPopout(id: number, patch: PopoutPatch): void
+  /**
+   * Subscribe to the set of currently open pop-outs (feed hand-off). Returns an
+   * unsubscribe function; call it on teardown so a re-mount never stacks listeners.
+   */
+  onPopoutsChanged(listener: (popouts: PopoutSummary[]) => void): () => void
+  /** This window's renderer role, derived once from the launch URL query. */
+  readonly role: WindowRole
+  /** This window's pop-out id when `role === 'popout'`, else null. */
+  readonly popoutId: number | null
+}
+
 /** The complete project-owned bridge surface exposed as `window.api`. */
 export interface AppApi {
   fr24: Fr24Api
   session: SessionApi
   config: ConfigApi
   audio: AudioApi
+  windows: WindowsApi
 }
 
 // ---------------------------------------------------------------------------
