@@ -55,7 +55,7 @@ flowchart TD
 
 **Goal.** Apply the Wyvern Watch visual language everywhere the app shows identity:
 OS-level icons (dock, taskbar, launcher, installer), in-app theming from the semantic tokens, and the mark in the header and About dialog.
-Every asset already exists under [design/brand/](../design/brand/) — this phase wires them in; it draws nothing new.
+Every asset already exists under [design/brand/](https://github.com/ericwait/airshow-traffic-monitor/tree/main/design/brand) — this phase wires them in; it draws nothing new.
 
 **Scope.**
 
