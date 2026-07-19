@@ -193,8 +193,19 @@ export const FR24_RELAYOUT_EVENT = 'fr24-relayout'
 // the engine, never triggering a store write or re-render.
 // ---------------------------------------------------------------------------
 
-/** The connection-health chip states — distinct from the activity light. */
-export type AudioStreamStatus = 'connecting' | 'live' | 'reconnecting' | 'error'
+/**
+ * The status-pill states — distinct from the activity light, and the pill is the
+ * connect toggle (on-demand model, decision 2026-07-19):
+ *   - `disconnected` — the default; no network activity at all, click to connect,
+ *   - `connecting`   — resolving/opening a wanted stream,
+ *   - `live`         — streaming and healthy,
+ *   - `reconnecting` — a wanted stream is down and retrying on the fast schedule,
+ *   - `feed-down`    — a wanted stream has been down long enough to retry calmly
+ *                      on the slow cadence (no more climbing counter),
+ *   - `error`        — a config/playlist problem (bad mount id, unparsable .pls).
+ */
+export type AudioStreamStatus =
+  'disconnected' | 'connecting' | 'live' | 'reconnecting' | 'feed-down' | 'error'
 
 /** One ATC stream's live UI state. */
 export interface AudioStreamUi {

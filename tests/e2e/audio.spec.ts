@@ -4,14 +4,18 @@ import { mainEntry, getMainWindow, e2eEnv } from './support'
 
 // Audio-panel smoke for the built app. Proves the ATC Audio pillar mounts, the
 // eight curated streams render as strips with their default labels, each carries
-// a status chip and a priority-rank badge, and the mute + solo toggles flip.
+// a status pill and a priority-rank badge, the mute + solo toggles flip, and the
+// on-demand connect model holds: every stream starts DISCONNECTED and clicking a
+// pill connects (then disconnects) that stream.
 //
 // CRITICAL: this spec must NEVER depend on LiveATC being reachable — CI is a
-// network-restricted Linux box. We launch with AUDIO_E2E=1 (short reconnect
-// backoff, no audible autoplay) and assert the chip is in the *set* of valid
-// states {connecting, reconnecting, error, live}: with no network the streams
-// settle into reconnecting/error, with network they reach connecting/live —
-// either way the panel is populated and the assertion holds, without waiting.
+// network-restricted Linux box. We launch with AUDIO_E2E=1, which starts from a
+// deterministic all-disconnected default (session restore is skipped under the
+// harness) and shortens the reconnect backoff. After a connect click we assert
+// only that the pill LEAVES 'disconnected' and lands in the *set* of connected
+// states {connecting, live, reconnecting, feed-down, error}: with no network it
+// settles into reconnecting/feed-down, with network it reaches connecting/live —
+// either way the assertion holds without waiting on the network.
 //
 // Prerequisite: `electron-vite build` must have run (out/main + out/renderer).
 // `just e2e` builds first.
@@ -28,7 +32,8 @@ const DEFAULT_STREAMS: ReadonlyArray<readonly [string, string]> = [
   ['atis', 'ATIS']
 ]
 
-const VALID_CHIP_STATES = new Set(['connecting', 'live', 'reconnecting', 'error'])
+/** The states a stream can be in once connected (i.e. no longer 'disconnected'). */
+const CONNECTED_STATES = new Set(['connecting', 'live', 'reconnecting', 'feed-down', 'error'])
 
 let app: ElectronApplication
 let page: Page
@@ -58,18 +63,33 @@ test('renders all eight curated stream strips with their default labels', async 
   }
 })
 
-test('every strip carries an activity light and a status chip in a valid state', async () => {
+test('every strip carries an activity light and a status pill defaulting to disconnected', async () => {
   for (const [id] of DEFAULT_STREAMS) {
     await expect(page.getByTestId(`activity-light-${id}`)).toBeVisible()
 
-    const chip = page.getByTestId(`status-chip-${id}`)
-    await expect(chip).toBeVisible()
-    // 'connecting' is the initial state (already in the valid set), so this
-    // resolves immediately and never waits on the reconnect backoff schedule.
-    await expect
-      .poll(async () => VALID_CHIP_STATES.has((await chip.getAttribute('data-status')) ?? ''))
-      .toBe(true)
+    const pill = page.getByTestId(`status-chip-${id}`)
+    await expect(pill).toBeVisible()
+    // On-demand model: nothing connects at launch, so every pill starts
+    // 'disconnected'. This resolves immediately and never waits on the network.
+    await expect(pill).toHaveAttribute('data-status', 'disconnected')
   }
+})
+
+test('the status pill is a real button that connects, then disconnects, on click', async () => {
+  const pill = page.getByTestId('status-chip-guard')
+  await expect(pill).toHaveAttribute('data-status', 'disconnected')
+
+  // Clicking a disconnected pill connects the stream — it leaves 'disconnected'
+  // and lands in a connected state. Network-agnostic: reconnecting/feed-down with
+  // no network, connecting/live with one.
+  await pill.click()
+  await expect
+    .poll(async () => CONNECTED_STATES.has((await pill.getAttribute('data-status')) ?? ''))
+    .toBe(true)
+
+  // Clicking again disconnects it and cancels any retry — back to 'disconnected'.
+  await pill.click()
+  await expect(pill).toHaveAttribute('data-status', 'disconnected')
 })
 
 test('the mute toggle flips its pressed state', async () => {

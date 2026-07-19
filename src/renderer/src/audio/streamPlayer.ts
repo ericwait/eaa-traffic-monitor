@@ -1,6 +1,7 @@
 import type { StreamConfig } from '@shared/defaultConfig'
 import type { ResolveFailureKind, ResolveStreamResult } from '@shared/ipc'
 import { DEFAULT_DEVICE_ID } from './devices'
+import { backoffDelayMs } from './backoff'
 
 /** The AudioContext.setSinkId shape — typed locally since lib.dom lags Chromium. */
 type SinkCapableContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> }
@@ -32,10 +33,15 @@ export interface SetOutputResult {
 // Reconnect triggers are element 'error', element 'ended', and a currentTime
 // stall watchdog — NEVER VAD silence: a squelched frequency is legitimately
 // silent for minutes and must not be mistaken for a dead stream.
+//
+// Connection is ON-DEMAND (decision 2026-07-19): a player starts 'disconnected'
+// with no network activity at all and does nothing until connect() is called
+// (the operator clicks the status pill, or a saved-connected stream is restored
+// on launch). Only a connected ("wanted") stream reconnects; disconnect() stops
+// the network, cancels any retry timer, and returns the player to 'disconnected'.
 
 /** The reconnect state machine's states. */
-export type StreamPlayerState =
-  'idle' | 'resolving' | 'connecting' | 'live' | 'reconnecting' | 'error'
+export type StreamPlayerState = 'disconnected' | 'connecting' | 'live' | 'reconnecting' | 'error'
 
 /** A status snapshot pushed to the engine on every state change. */
 export interface StreamPlayerStatus {
@@ -62,8 +68,6 @@ export interface StreamPlayerOptions {
   autoPlay?: boolean
 }
 
-/** Exponential backoff schedule in seconds; the last value is the cap. */
-const BACKOFF_SECONDS = [1, 2, 4, 8, 15, 30]
 /** Backoff used under the e2e harness — long enough to be real, short to not wait. */
 const FAST_BACKOFF_MS = 120
 /** currentTime must advance within this window or the stream is deemed stalled. */
@@ -89,7 +93,7 @@ export class StreamPlayer {
   private audioEl: HTMLAudioElement | null = null
   private sourceNode: MediaElementAudioSourceNode | null = null
 
-  private state: StreamPlayerState = 'idle'
+  private state: StreamPlayerState = 'disconnected'
   private attempt = 0
   private lastError: string | null = null
   private nextRetryAt: number | null = null
@@ -158,12 +162,55 @@ export class StreamPlayer {
 
   // --- lifecycle ----------------------------------------------------------
 
-  /** Begin connecting and arm the watchdog. Idempotent-ish: call once. */
-  start(): void {
-    if (this.destroyed || this.intendedPlaying) return
+  /**
+   * Connect this stream on demand: mark it WANTED, arm the watchdog, and force an
+   * immediate FRESH resolve+play (fresh so a pill-click reconnect re-lands on a
+   * live rotating host). Idempotent while already wanted — a second call re-arms a
+   * fresh attempt rather than stacking a duplicate connect.
+   */
+  connect(): void {
+    if (this.destroyed) return
     this.intendedPlaying = true
-    this.watchdogTimer = setInterval(() => this.watchdog(), WATCHDOG_MS)
-    void this.doAttempt(false)
+    // A fresh connect resets the failure history so the chip starts clean and the
+    // back-off schedule counts from this attempt, not a stale earlier run.
+    this.attempt = 0
+    this.lastError = null
+    this.nextRetryAt = null
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
+    if (!this.watchdogTimer) this.watchdogTimer = setInterval(() => this.watchdog(), WATCHDOG_MS)
+    void this.doAttempt(true, true)
+  }
+
+  /**
+   * Disconnect on demand: stop all network activity, cancel any pending retry,
+   * tear down the audio element, and return to 'disconnected'. The persistent
+   * graph nodes and the context stay alive (a later connect reuses them), so
+   * volume / mute / pan survive a disconnect→connect cycle unchanged.
+   */
+  disconnect(): void {
+    if (this.destroyed) return
+    this.intendedPlaying = false
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
+    }
+    if (this.watchdogTimer) {
+      clearInterval(this.watchdogTimer)
+      this.watchdogTimer = null
+    }
+    this.teardownAudio()
+    this.attempt = 0
+    this.lastError = null
+    this.nextRetryAt = null
+    this.setState('disconnected')
+  }
+
+  /** True while this stream is WANTED (connected by the operator / restore). */
+  get connectionWanted(): boolean {
+    return this.intendedPlaying
   }
 
   /**
@@ -307,21 +354,24 @@ export class StreamPlayer {
 
   // --- internals ----------------------------------------------------------
 
-  private async doAttempt(fresh: boolean): Promise<void> {
+  private async doAttempt(fresh: boolean, initial: boolean): Promise<void> {
     if (this.destroyed) return
 
-    // The first connect shows resolving -> connecting; a reconnect keeps its
-    // 'reconnecting'/'error' chip (with attempt + countdown) while re-resolving.
-    if (!fresh) this.setState('resolving')
+    // A user-initiated connect (initial) shows the 'connecting' chip immediately;
+    // an automatic reconnect keeps its 'reconnecting'/'error' chip (with the
+    // attempt count + countdown) while it re-resolves in the background.
+    if (initial) this.setState('connecting')
 
     let result: ResolveStreamResult
     try {
       result = await this.opts.resolve(this.id, { fresh })
     } catch (err: unknown) {
+      // A disconnect during the in-flight resolve wins: drop the outcome silently.
+      if (this.destroyed || !this.intendedPlaying) return
       this.handleFailure(`could not resolve stream: ${errMessage(err)}`, 'network')
       return
     }
-    if (this.destroyed) return
+    if (this.destroyed || !this.intendedPlaying) return
 
     if (!result.ok) {
       this.handleFailure(result.error, result.kind)
@@ -329,7 +379,6 @@ export class StreamPlayer {
     }
 
     this.buildAudio(result.finalUrl)
-    if (!fresh) this.setState('connecting')
     if (this.opts.autoPlay !== false) this.tryPlay()
   }
 
@@ -412,7 +461,9 @@ export class StreamPlayer {
   }
 
   private handleFailure(error: string, kind: ResolveFailureKind): void {
-    if (this.destroyed) return
+    // A disconnected (not-wanted) stream never reconnects — only wanted streams
+    // self-heal (decision 2026-07-19).
+    if (this.destroyed || !this.intendedPlaying) return
     // Ignore duplicate/stray failures once a retry is already scheduled.
     if (this.retryTimer !== null) return
 
@@ -436,13 +487,15 @@ export class StreamPlayer {
 
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
-      void this.doAttempt(true)
+      void this.doAttempt(true, false)
     }, delay)
   }
 
   private backoffDelay(): number {
     if (this.opts.fastReconnect) return FAST_BACKOFF_MS
-    const base = BACKOFF_SECONDS[Math.min(this.attempt - 1, BACKOFF_SECONDS.length - 1)] * 1000
+    // The pure schedule (fast for the first tries, then the slow "feed down"
+    // cadence) plus ±20% jitter so a fleet of dead mounts doesn't retry in lockstep.
+    const base = backoffDelayMs(this.attempt)
     const jitter = base * (Math.random() * 0.4 - 0.2) // ±20%
     return Math.max(250, Math.round(base + jitter))
   }
