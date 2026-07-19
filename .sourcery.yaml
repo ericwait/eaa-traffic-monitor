@@ -1,0 +1,6 @@
+rules: []
+python_version: '3.9'
+
+# Disable all checks
+disable:
+  - all
