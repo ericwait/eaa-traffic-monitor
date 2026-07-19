@@ -1,8 +1,8 @@
-> Status: draft | Audience: anyone designing, building, or reviewing the tracking panel | See also: [../../README.md](../../README.md), [Audio.md](Audio.md), [Video.md](Video.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md)
+> Status: draft | Audience: anyone designing, building, or reviewing the tracking panel | See also: [README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md), [Audio.md](Audio.md), [Video.md](Video.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md)
 
 # Tracking
 
-Live flight tracking is the third pillar of the EAA Traffic Monitor, alongside ATC audio ([Audio.md](Audio.md)) and the YouTube video grid ([Video.md](Video.md)).
+Live flight tracking is the third pillar of the Airshow Traffic Monitor, alongside ATC audio ([Audio.md](Audio.md)) and the YouTube video grid ([Video.md](Video.md)).
 This document covers why the tracking panel exists, what it does, where it is fragile, and what "working" looks like once it ships.
 
 ## Intent
@@ -39,7 +39,7 @@ The tracking panel folds that window into the unified dashboard without losing w
   The panel's session persists across app relaunches, so the operator's paid-account features stay available without logging in again each morning (decision 2026-07-18).
   The last map view — position and zoom — restores automatically on launch too, nearly for free: the site encodes view changes into its own address, so remembering the address is enough to remember the view.
 - **Resizes on its own terms.**
-  Per the original requirements ([../../README.md](../../README.md)), the tracking panel is sized and emphasized independently of the video grid: dragging it larger or smaller never reflows the YouTube tiles, and emphasizing a grid tile never touches the panel.
+  Per the original requirements ([README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md)), the tracking panel is sized and emphasized independently of the video grid: dragging it larger or smaller never reflows the YouTube tiles, and emphasizing a grid tile never touches the panel.
 - **Muted like everything else, visibly.**
   The panel can carry sound, and it follows the same app-wide contract as every other source: a mute control plus a visible indicator of whether it is currently making noise (see [Audio.md](Audio.md)).
   Unlike the ATC streams, it gets no per-source volume, no output routing, and no activity analysis — mute plus an on/off activity signal are all this source needs.

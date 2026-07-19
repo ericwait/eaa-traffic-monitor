@@ -1,24 +1,18 @@
-## Description
+<!-- Keep this short enough to actually fill out. See CONTRIBUTING.md for the full Definition of Done this checklist mirrors. -->
 
-<!-- Summarize the change and why it's needed. -->
+## What & why
 
-## Related Issue
+[FILL: one paragraph — what changed and why. Link the issue: Closes #NN]
 
-<!-- Link the issue this addresses, e.g. Closes #12 -->
+## How verified
 
-## Type of Change
+[FILL: what you ran and what you observed — `just test`, `just e2e`, a manual `just dev` check, a screenshot]
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Documentation
-- [ ] Other (please describe):
+## Definition of Done
 
-## Checklist
-
-- [ ] I've read [CONTRIBUTING.md](../CONTRIBUTING.md)
-- [ ] I've assigned @ericwait as reviewer
-- [ ] I've described the change and its motivation above
-
-## Additional Notes
-
-<!-- Anything else reviewers should know -->
+- [ ] `just lint`, `just fmt`, and `just typecheck` are clean
+- [ ] `just test` passes; `just e2e` passes if the change touches app launch or the window
+- [ ] Docs updated (if behavior or structure changed) — design vs development split respected
+- [ ] Changelog `[Unreleased]` entry added (if user-facing)
+- [ ] Decision stamp + `docs/decisions/README.md` row added in the same commit (if a decision was made)
+- [ ] Targets `develop` (not `main`); merge-commit only — never squash (GitVersion dependency)

@@ -1,0 +1,66 @@
+# electron-builder packaging config. Phase 0 lands the config so it typechecks
+# and `--dir` packaging is exercisable; the 3-OS release matrix and the
+# changelog gate arrive with Phase 5 (release.yml). Alpha artifacts are
+# UNSIGNED (CSC_IDENTITY_AUTO_DISCOVERY=false in CI) — no certificate exists yet.
+appId: com.ericwait.airshow-traffic-monitor
+productName: Airshow Traffic Monitor
+directories:
+  buildResources: build
+  output: dist
+
+# electron-vite emits the built app to out/. Ship that plus package.json;
+# everything else (source, tests, docs) is excluded from the packaged app.
+files:
+  - out/**
+  - package.json
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierrc.yaml,.prettierignore}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{vitest.config.ts,playwright.config.ts}'
+  - '!tests/*'
+  - '!docs/*'
+
+# Do not resolve unpacked dependencies into the ASAR for native modules; none
+# yet, but keep the sane default the template ships.
+asarUnpack:
+  - resources/**
+
+mac:
+  category: public.app-category.utilities
+  # A pre-built multi-resolution .icns (16→1024) generated on macOS from the
+  # 1024 Ember master via sips/iconutil (design/brand/icns/). electron-builder
+  # uses a supplied .icns as-is without re-encoding, so the dock/Finder icon is
+  # the true crisp warbird mark at every size.
+  icon: design/brand/icns/app-icon-ember.icns
+  target:
+    - dmg
+    - zip
+  # Unsigned alpha: skip Gatekeeper assessment fields that require a cert.
+  hardenedRuntime: false
+
+win:
+  # electron-builder requires a Windows source icon of at least 256×256 and
+  # converts a PNG master to the multi-size .ico itself. The shipped
+  # ico/favicon.ico is only 16/32/48 (below that floor), so it is NOT usable
+  # here — point at the 1024 Ember master instead.
+  icon: design/brand/png/app-icon-ember-1024.png
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  # Linux takes the same 1024 PNG master (min 256×256); electron-builder derives
+  # the standard 16→512 PNG icon set for the AppImage from it.
+  icon: design/brand/png/app-icon-ember-1024.png
+  target:
+    - AppImage
+  category: Utility
+
+# Never phone home during a dev/CI build looking for update metadata.
+publish: null

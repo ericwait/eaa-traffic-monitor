@@ -1,0 +1,25 @@
+node_modules
+out
+dist
+.playwright
+playwright-report
+test-results
+package-lock.json
+
+# Markdown is authored in SEMANTIC LINE BREAKS (one sentence per line — see
+# CLAUDE.md). Prettier's prose reflow fights that convention, so all markdown
+# is owned by humans, not the formatter. Do not remove this exclusion.
+**/*.md
+
+# Design assets, vendored SVGs, and the hand-maintained Pages page are not
+# ours to reformat.
+docs/index.html
+docs/design/assets
+design
+
+# Pre-existing GitHub community templates authored to their own conventions.
+.github/ISSUE_TEMPLATE
+
+
+# Agent worktrees are separate checkouts (each runs its own formatter).
+.claude/worktrees/

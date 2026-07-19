@@ -2,7 +2,7 @@
 
 # Tech stack
 
-EAA Traffic Monitor is built as an Electron + TypeScript + React desktop app, not a web app and not a from-scratch native build.
+Airshow Traffic Monitor is built as an Electron + TypeScript + React desktop app, not a web app and not a from-scratch native build.
 Two of the app's three pillars force that call: FlightRadar24 refuses to be embedded in any browser page at all, and per-stream ATC audio needs OS-level output-device routing plus real multi-window support that a browser tab can't provide.
 The whole toolchain — shell, build, state, testing, governance — was locked with the user on 2026-07-18 in one pass, so a usable alpha could ship by the Monday 2026-07-20 show open.
 This document covers what's in the stack, why, what it costs, and what's worth revisiting once the show-week deadline stops driving every call.
@@ -65,11 +65,42 @@ It's the third that rules out a plain web app outright, and once a desktop shell
   Electron's multi-process model costs real memory next to a single native binary.
   Weighed against what it replaces — six standalone VLC instances, a separate FR24 browser window, and dozens of YouTube tabs across two monitors — the prototype this app retires was never light either.
 
+## Session restore and pop-outs (Phase 4)
+
+Full session restore is backed by a single `session.json` written through `electron-store` (decision 2026-07-19).
+The main process holds the session state authoritatively in memory: every `session:patch` merges into that live object immediately — so a read right after a write is consistent, which the audio engine relies on — and schedules a trailing-debounced (~500 ms) atomic flush to disk.
+Coalescing a slider drag's storm of patches into one write is the point of the debounce; a guaranteed flush on `will-quit` means a last-second change still inside its debounce window is never lost.
+The merge, the defensive sanitizer, and the pop-out bookkeeping are a pure module (`src/shared/session.ts`) so they are unit-tested without the store or a window.
+The restored surface is window bounds and display, the resizable panel layout (via a `react-resizable-panels` `LayoutStorage` adapter over the session), per-stream volume/mute/pan, the video layout, every pop-out, and the FR24 last URL.
+
+Per-stream volume, mute, and pan are session-restored, but priority is deliberately NOT (decision 2026-07-19): `config.json` is priority's live tuning surface, so it is re-derived from config on every launch rather than pinned in the session, where a stale value would silently override an edited config.
+
+A window's saved bounds are validated against the displays that exist at launch by a pure, Electron-free function (`src/shared/windowBounds.ts`, decision 2026-07-19): a sufficiently-visible window is left where it was, and one that is off-screen — a disconnected monitor, a display resized smaller — is recentred (and shrunk to fit) onto its last display if it survives, else the primary.
+This is what makes the Phase 4 exit criterion hold: a pop-out saved on a second monitor reappears on the primary when that monitor is unplugged, never off-screen and invisible.
+
+Pop-outs are grid-only windows that load the SAME renderer bundle at `?window=popout&id=N` (decision 2026-07-19); the preload reads that query to mount a video-only view (no ATC engine, no FR24 view) for a subset of feeds.
+The main process owns every pop-out `BrowserWindow` and its session slice — bounds/display, feeds, layout, per-feed volumes — with bounds tracked main-side and layout/volumes persisted by the pop-out renderer through the `windows:*` channels.
+Opening a pop-out hands its feeds off the main grid (a broadcast of the open set drives the hide/return in every window) and closing it returns them; quitting the app preserves the pop-out slices for next-launch restore, while a user closing one pop-out forgets it.
+
+## Versioning and releases
+
+The version is computed from git history, never hand-edited (decision 2026-07-18) — `package.json` stays at `0.0.0` on purpose.
+GitVersion reads the GitHubFlow history: every commit on `develop` is an `-alpha.N` pre-release (for example `0.1.0-alpha.7`), and the real major/minor/patch is decided only when `develop` is released to `main` and tagged.
+CI is the authoritative computer of that version — the `version` job in [ci.yml](https://github.com/ericwait/airshow-traffic-monitor/blob/main/.github/workflows/ci.yml) runs GitVersion on a full-history checkout, and `just version` is a local convenience that prints the same SemVer and degrades to an install hint when GitVersion is absent.
+Releases are cut by pushing a `v` + SemVer tag (for example `v0.1.0`): [release.yml](https://github.com/ericwait/airshow-traffic-monitor/blob/main/.github/workflows/release.yml) gates on a matching `CHANGELOG.md` section, builds the unsigned three-OS installers, stamps the tag's version onto the artifacts, and publishes them to a GitHub Release.
+A tag carrying a pre-release identifier (the `-` in `v0.1.0-alpha.1`) publishes as a GitHub pre-release; a clean `v0.1.0` publishes as a full release.
+
 ## Known limitations
 
 - **YouTube audio is volume/mute only.**
   The IFrame Player owns its media element across an origin boundary; it can't be handed to the Web Audio graph for analysis, and it can't be routed to a specific output device with `setSinkId`.
   Every YouTube tile plays through the OS default output device — a hard cross-origin limitation, not a missing feature.
+- **The packaged renderer is served over a loopback HTTP origin, not a custom scheme (decision 2026-07-19).**
+  The YouTube IFrame Player API validates the origin embedding its player and rejects the `app://` custom scheme with error 153 — verified in Phase 3, where the grid loaded from the electron-vite dev server but went blank from a packaged `app://` build.
+  The fix is a tiny loopback HTTP server bound to `127.0.0.1` on an ephemeral port, serving the built renderer from `out/renderer` (`src/main/rendererServer.ts`); the main window loads `http://127.0.0.1:<port>/index.html` instead of `app://`.
+  A `127.0.0.1` origin is still a secure context, so `enumerateDevices`/`setSinkId` and the postMessage handshakes keep working, and nothing is exposed off-host.
+  The `app://` scheme stays registered as a logged, degraded fallback used only if the loopback socket fails to bind (YouTube tiles are then blank, but audio and FR24 are unaffected).
+  This supersedes the earlier plan to serve the packaged renderer from `app://`; the once-blank-in-packaged-builds YouTube grid now plays.
 - **The FR24 panel paints above all DOM (z-order law).**
   `WebContentsView` composites above the page, not inside it — an HTML modal or overlay cannot cover it.
   Anything that needs to appear over the FR24 region must call `fr24:setVisible(false)` first; anything transient over it should use native Electron menus instead of DOM overlays.
@@ -92,6 +123,10 @@ It's the third that rules out a plain web app outright, and once a desktop shell
 - **LiveATC blocks non-browser user agents.**
   Every `.pls` resolve and stream fetch from the main process must send a browser-like `User-Agent`; a bare or bot UA is refused outright.
   Handled today in `plsResolver.ts`, but it constrains any future code path touching LiveATC — it can never be a plain server-side fetch with default headers.
+- **Field weather is sourced from a free, keyless NOAA aviation-weather data API (decision 2026-07-19).**
+  Current conditions and a short-range forecast for the tracked airfield (see [../design/Weather.md](../design/Weather.md)) are fetched from `aviationweather.gov`'s Data API — `GET /api/data/metar?ids=<station>&format=json` and `GET /api/data/taf?ids=<station>&format=json` — a public US-government service that needs no API key and publishes no rate limit.
+  Unlike LiveATC, this API expects programmatic callers rather than browsers, so "polite client" here means a descriptive User-Agent (app name, version, and a link to this repository) instead of browser impersonation, fetched only from the main process (`src/main/weather.ts`) and cached; polling never runs more often than every 5 minutes, 10 by default (`config.weather.pollMinutes`).
+  The API's own decoded flight-category field is deliberately not trusted — the app re-derives VFR/MVFR/IFR/LIFR from ceiling and visibility itself (`src/shared/weather.ts`), so the category logic stays unit-testable and independent of this one source's own decoding.
 
 ## Alternatives considered
 

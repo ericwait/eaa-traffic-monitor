@@ -1,8 +1,8 @@
-> Status: draft | Audience: anyone designing or building audio behavior in the app | See also: [Video.md](Video.md), [Tracking.md](Tracking.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md), [../../README.md](../../README.md)
+> Status: draft | Audience: anyone designing or building audio behavior in the app | See also: [Video.md](Video.md), [Tracking.md](Tracking.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md), [README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md)
 
 # Audio
 
-This document specifies every sound source in EAA Traffic Monitor: the ATC radio streams, the audio that comes with the YouTube video feeds, and the audio the flight-tracker browser panel can make.
+This document specifies every sound source in Airshow Traffic Monitor: the ATC radio streams, the audio that comes with the YouTube video feeds, and the audio the flight-tracker browser panel can make.
 It is written in product terms; where a mechanism is load-bearing it links to [../development/TechStack.md](../development/TechStack.md) rather than naming the machinery here.
 Audio is the app's hardest and most important part — listening to Oshkosh is where monitoring breaks down first, so the audio system is designed around that failure.
 
@@ -15,7 +15,7 @@ The manual prototype this app replaces ran six separate media players stacked in
 
 Several live radio streams are fine while only one channel is talking.
 The moment calls overlap across channels — routine at Oshkosh — the combined audio becomes unintelligible, and, worse, the operator cannot tell *which* stream a given call is coming from.
-That is the core problem the [README](../../README.md) names, and the whole audio system exists to answer it three ways:
+That is the core problem the [README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md) names, and the whole audio system exists to answer it three ways:
 
 1. **Show who's talking at a glance.**
    Every ATC channel carries an activity light driven by its live signal, so the operator can look instead of straining to pick one voice out of the wall.
@@ -56,7 +56,7 @@ Their causes are recorded below and in [Video.md](Video.md) and [Tracking.md](Tr
   Each channel has its own volume, independent of every other.
 - **Mute that keeps the light alive.**
   Muting a channel drops what you *hear* to zero but never stops the app from *watching* it — so a muted channel's activity light still shows it talking.
-  This is deliberate and is exactly what the [README](../../README.md) asks for: you mute a channel you don't want in your ears right now, yet still want to see the moment it comes alive so you can bring it back.
+  This is deliberate and is exactly what the [README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md) asks for: you mute a channel you don't want in your ears right now, yet still want to see the moment it comes alive so you can bring it back.
   (Mute lowers the channel's own volume to zero; it does not silence the analysis feeding the light.)
 - **Activity lights.**
   Each channel's light is driven by adaptive, squelch-aware detection: the app measures the stream's live signal level (via the runtime's audio graph) and learns each channel's own noise floor, lighting only when a real transmission rises above it.
@@ -68,7 +68,8 @@ Their causes are recorded below and in [Video.md](Video.md) and [Tracking.md](Tr
 - **Priority ranks with auto-ducking.**
   Every channel has a priority rank.
   A channel ducks only when a channel of *strictly higher* priority is active — equal ranks never duck each other.
-  When it ducks, it drops to −12 dB, with a fast duck and a slow release, so a priority call's opening syllables aren't buried under a channel still fading down, and a channel coming back up doesn't pump (decision 2026-07-18).
+  A **muted** higher-priority channel does not duck the channels below it (decision 2026-07-19): its activity light still shows it talking, but because the operator has taken it out of their ears, ducking the channels they *are* listening to on its behalf would drop the mix to silence for a voice no one can hear.
+  When a channel ducks, it drops to −12 dB, with a fast duck and a slow release, so a priority call's opening syllables aren't buried under a channel still fading down, and a channel coming back up doesn't pump (decision 2026-07-18).
   The result: Tower talks and Fisk quietly steps back within a fraction of a second, then eases back to full on its own.
 - **One-click solo.**
   Solo overrides everything — priorities, ducking, and mutes — collapsing the mix to a single channel instantly, and releasing back to the prior state just as fast.
@@ -76,15 +77,22 @@ Their causes are recorded below and in [Video.md](Video.md) and [Tracking.md](Tr
 - **Per-stream output device.**
   Any channel can be sent to its own output — for example, Tower to headphones while everything else plays on the desk speakers (decision 2026-07-18).
   This is the [Command-Center-Enthusiast](Stakeholders/Command-Center-Enthusiast.md)'s way of keeping the one channel that matters physically separate from the ambient wash of the rest.
-- **Automatic reconnection, forever.**
-  A dropped or stalled stream reconnects on its own, indefinitely, without the operator noticing or acting.
-  Reconnection health is shown by a **status indicator that is separate from the activity light** — connecting, live, reconnecting, or error.
+- **On-demand connection — the operator chooses what streams.**
+  Streams start **disconnected**: the app opens with no channel pulling audio, and a disconnected channel does no network activity at all.
+  The status indicator on each channel doubles as its connect control — click it to connect that channel, click it again to disconnect (decision 2026-07-19).
+  This replaced an earlier "auto-connect everything at launch and reconnect forever" model, which, at AirVenture prep, hammered event-only feeds that were not broadcasting yet and alarmed the operator with channels stuck endlessly retrying.
+  The operator still arranges audio once: the set of connected channels is remembered and restored on the next launch, so a curated arrangement comes back on its own (the restored channels reconnect a beat apart rather than all at once, to stay a polite guest of the stream host).
+- **Automatic reconnection for connected channels, with a calm floor.**
+  Once the operator connects a channel, a dropped or stalled stream reconnects on its own without them noticing or acting — but only a channel the operator asked for reconnects; a disconnected one stays quietly off.
+  Reconnection is quick at first, then eases off: after several failures in a row a channel stops climbing a retry counter and settles into a slow, steady retry shown as a calm **"feed down"** state instead of an ever-climbing alarm — a mount that is simply not on the air yet should not look like a crisis (decision 2026-07-19).
+  Clicking a channel's control always forces an immediate fresh attempt, so the operator can retry the instant a feed is expected to come up rather than waiting out the slow cadence.
+- **Health is shown by a status indicator separate from the activity light** — disconnected, connecting, live, reconnecting, feed-down, or error.
   The two are distinct on purpose: a channel that is *live but silent* (a squelched frequency with no traffic) is normal and can stay that way for minutes, so silence must never read as a fault.
-  The activity light answers "is anyone talking?"; the status indicator answers "is this stream healthy?"
+  The activity light answers "is anyone talking?"; the status indicator answers "is this channel connected, and is it healthy?"
 
 **Stream source: LiveATC (alpha release).**
 For the alpha release, streams are sourced from [LiveATC](https://www.liveatc.net), which provides `.pls` playlist URLs for Oshkosh frequencies via [the Oshkosh search](https://www.liveatc.net/search/?icao=osh).
-The app resolves these URLs to their underlying stream addresses at startup and caches them; this supports the architecture constraint that stream hosts block non-browser clients (the app presents itself as a browser when resolving addresses).
+The app resolves these URLs to their underlying stream addresses when a channel is connected (not at startup — nothing is fetched for a disconnected channel) and caches them; this supports the architecture constraint that stream hosts block non-browser clients (the app presents itself as a browser when resolving addresses).
 Future releases may add other stream sources (SDR, TuneIn, direct server URLs) through a pluggable stream-source layer; the alpha commits only to LiveATC and the frequencies listed below.
 
 **Curated KOSH defaults.**
@@ -144,9 +152,10 @@ See [Tracking.md](Tracking.md) for the panel itself.
 
 These are the observable acceptance criteria for the audio system — the exit conditions for its build phases in [../Implementation-Plan.md](../Implementation-Plan.md):
 
+- **The app opens with every channel disconnected;** the operator connects channels by clicking their status controls, and the connected set is restored on the next launch.
 - **Six or more ATC streams play at once** and stay coherent enough to monitor together.
 - **Every activity light matches what the ear hears — including muted channels,** whose lights keep working while their audio is off.
 - **A higher-priority call audibly ducks lower-priority streams within about 200 ms** and releases smoothly afterward, with no pumping.
-- **Network loss self-heals unattended:** pull the connection and restore it, and every stream returns to live on its own, with no operator action.
+- **Network loss self-heals unattended for connected channels:** pull the connection and restore it, and every connected stream returns to live on its own, with no operator action; a channel that stays unreachable calms into a "feed down" state rather than an ever-climbing counter.
 - **One stream plays on headphones while the rest play on speakers.**
 - **Detection thresholds are tunable without code changes** — edited in the configuration file at the show, no rebuild.

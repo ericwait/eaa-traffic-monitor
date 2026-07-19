@@ -1,0 +1,45 @@
+# Commit-time enforcement, the first of two layers. These hooks run the secret
+# scanner, the linter, and the formatter before a commit is even created; CI
+# (.github/workflows/ci.yml) is the second layer, running the same checks so
+# nothing that skipped the hook — a `--no-verify`, a teammate who has not run
+# `pre-commit install` yet — reaches a pull request unchecked either.
+#
+# Install once per clone:
+#
+#   pre-commit install
+#
+# PIN RULE: the eslint and prettier hook `rev`s below run the versions declared
+# in package.json (via `additional_dependencies`), so local and CI agree on what
+# "lint"/"format" mean. Bump the package.json version and the hook pin in the
+# same commit; if they drift, you get hook-passes-CI-fails for no visible reason.
+repos:
+  # gitleaks scans staged changes for hardcoded secrets before they can become a
+  # commit. Language-agnostic and load-bearing on nothing else in this file.
+  # Check https://github.com/gitleaks/gitleaks/releases for current.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  # ESLint as a local hook: run the project's own eslint (the same binary
+  # `just lint` uses) rather than a mirrored copy, so there is exactly one
+  # eslint config and one version in play. Check-only at commit time.
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint (check-only)
+        language: system
+        entry: npx eslint
+        types_or: [ts, tsx, javascript, jsx]
+        # Never auto-fix in the hook — `just fmt` owns mutation; the hook only
+        # reports, so a commit is never silently rewritten under the author.
+        args: [--max-warnings=0]
+        require_serial: true
+
+      - id: prettier
+        name: prettier (check-only)
+        language: system
+        entry: npx prettier --check
+        # Match .prettierignore: markdown is human-owned (semantic line breaks).
+        types_or: [ts, tsx, javascript, jsx, css, html, json, yaml]
+        exclude: '^(package-lock\.json|\.github/ISSUE_TEMPLATE/|docs/index\.html)'

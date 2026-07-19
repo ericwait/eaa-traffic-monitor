@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wyvern Watch — brand sheet</title>
+<link rel="icon" href="svg/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  body { padding: var(--space-6); max-width: 1040px; margin: 0 auto; }
+  .page-head { display:flex; align-items:center; gap: var(--space-4); margin-bottom: var(--space-6); }
+  .page-head img { width: 72px; height: 72px; }
+  .page-head h1 { font-size: var(--text-4xl); margin: 0; }
+  .page-head p { margin: 2px 0 0; color: var(--color-fg-muted); }
+
+  section { margin: var(--space-6) 0; }
+  section > h2 { font-size: var(--text-xl); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--color-fg-muted); border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-2); }
+
+  .themes { display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+  .theme-card { border-radius: var(--radius-panel); overflow:hidden; border:1px solid var(--color-border); }
+  .theme-card .stage { display:flex; align-items:center; justify-content:center; padding: var(--space-6); }
+  .theme-card .stage img { width: 190px; height: 190px; }
+  .theme-card .meta { padding: var(--space-4); background: var(--color-surface); }
+  .theme-card .meta strong { font-family: var(--font-display); letter-spacing: var(--tracking-caps); text-transform: uppercase; font-size: var(--text-sm); }
+  .theme-card .meta .swatches { display:flex; gap: var(--space-2); margin-top: var(--space-3); }
+  .sw { width: 34px; height: 34px; border-radius: var(--radius-sm); border:1px solid rgba(128,128,128,.25); }
+
+  .swatchgrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: var(--space-3); }
+  .token { border:1px solid var(--color-border); border-radius: var(--radius-md); overflow:hidden; }
+  .token .chip { height: 54px; }
+  .token .cap { padding: var(--space-2) var(--space-3); background: var(--color-surface); font-size: var(--text-xs); }
+  .token .cap b { display:block; font-family: var(--font-display); text-transform: uppercase; letter-spacing: var(--tracking-caps); font-size: 11px; }
+  .token .cap code { color: var(--color-fg-muted); }
+
+  .specimen p { margin: var(--space-2) 0; }
+  .u-display { font-family: var(--font-display); }
+  .u-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+  .btn { font-family: var(--font-sans); font-weight: var(--weight-semibold); font-size: var(--text-sm);
+         padding: var(--space-2) var(--space-4); border-radius: var(--radius-md); border:1px solid transparent; cursor:pointer; }
+  .btn-primary { background: var(--color-accent); color: var(--color-accent-contrast); }
+  .btn-primary:hover { background: var(--color-accent-hover); }
+  .btn-ghost { background: transparent; color: var(--color-fg); border-color: var(--color-border); }
+
+  .panel { background: var(--color-surface); border:1px solid var(--color-border); border-radius: var(--radius-panel);
+           padding: var(--space-4); box-shadow: var(--shadow-sm); }
+
+  .favrow { display:flex; align-items:flex-end; gap: var(--space-5); }
+  .favrow figure { margin:0; text-align:center; }
+  .favrow figcaption { font-size: var(--text-xs); color: var(--color-fg-muted); margin-top: var(--space-2); }
+
+  .mono-demo { width:64px; height:64px; background: var(--color-fg);
+    -webkit-mask: url("svg/icon-mono.svg") center/contain no-repeat; mask: url("svg/icon-mono.svg") center/contain no-repeat; }
+
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); align-items:start; }
+</style>
+</head>
+<body>
+
+  <div class="page-head">
+    <img src="svg/icon.svg" alt="Wyvern Watch mark">
+    <div>
+      <h1>Wyvern Watch</h1>
+      <p>Airshow traffic monitor · top-down WWII dragon-wing mark</p>
+    </div>
+  </div>
+
+  <section>
+    <h2>Themes</h2>
+    <div class="themes">
+      <div class="theme-card">
+        <div class="stage" style="background:#F1EAD9"><img src="svg/icon-cream.svg" alt="Cream Classic mark"></div>
+        <div class="meta">
+          <strong>Cream Classic — light / default</strong>
+          <div class="swatches">
+            <span class="sw" style="background:#F1EAD9"></span>
+            <span class="sw" style="background:#21303A"></span>
+            <span class="sw" style="background:#C0392B"></span>
+            <span class="sw" style="background:#7C8A93"></span>
+          </div>
+        </div>
+      </div>
+      <div class="theme-card">
+        <div class="stage" style="background:#161210"><img src="svg/icon-ember.svg" alt="Ember mark"></div>
+        <div class="meta">
+          <strong>Ember — dark</strong>
+          <div class="swatches">
+            <span class="sw" style="background:#161210"></span>
+            <span class="sw" style="background:#F0E9DE"></span>
+            <span class="sw" style="background:#E4572E"></span>
+            <span class="sw" style="background:#9AA7AD"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Semantic tokens (light)</h2>
+    <div class="swatchgrid">
+      <div class="token"><div class="chip" style="background:#F1EAD9"></div><div class="cap"><b>bg</b><code>#F1EAD9</code></div></div>
+      <div class="token"><div class="chip" style="background:#FBF6EA"></div><div class="cap"><b>surface</b><code>#FBF6EA</code></div></div>
+      <div class="token"><div class="chip" style="background:#E7DDC8"></div><div class="cap"><b>surface-2</b><code>#E7DDC8</code></div></div>
+      <div class="token"><div class="chip" style="background:#21303A"></div><div class="cap"><b>fg</b><code>#21303A</code></div></div>
+      <div class="token"><div class="chip" style="background:#566570"></div><div class="cap"><b>fg-muted</b><code>#566570</code></div></div>
+      <div class="token"><div class="chip" style="background:#C0392B"></div><div class="cap"><b>accent</b><code>#C0392B</code></div></div>
+      <div class="token"><div class="chip" style="background:#7C8A93"></div><div class="cap"><b>secondary</b><code>#7C8A93</code></div></div>
+      <div class="token"><div class="chip" style="background:#D8CDB4"></div><div class="cap"><b>border</b><code>#D8CDB4</code></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Type</h2>
+    <div class="specimen">
+      <p class="u-display" style="font-size:var(--text-4xl)">Barlow Semi Condensed — display</p>
+      <p class="label-caps">Panel header · uppercase gauge label</p>
+      <p style="font-size:var(--text-lg)">Inter — body text for the interface. High legibility at small sizes, neutral tone.</p>
+      <p class="u-mono" style="font-size:var(--text-lg)">N1234A · 118.900 · FL350 · RWY 36</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Components</h2>
+    <div class="grid2">
+      <div class="panel">
+        <p class="label-caps">Live stream</p>
+        <p style="margin:.25rem 0 1rem">Tower · Live feed</p>
+        <button class="btn btn-primary">Connect</button>
+        <button class="btn btn-ghost">Mute</button>
+      </div>
+      <div class="panel" style="display:flex; align-items:center; gap:var(--space-4)">
+        <div class="mono-demo" title="icon-mono tinted with currentColor"></div>
+        <div>
+          <p class="label-caps">Monochrome mark</p>
+          <p style="margin:.25rem 0 0; color:var(--color-fg-muted); font-size:var(--text-sm)">Tinted via <code>currentColor</code> / CSS mask.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Favicon sizes</h2>
+    <div class="favrow">
+      <figure><img src="png/favicon-16.png" width="16" height="16" alt=""><figcaption>16</figcaption></figure>
+      <figure><img src="png/favicon-32.png" width="32" height="32" alt=""><figcaption>32</figcaption></figure>
+      <figure><img src="png/favicon-48.png" width="48" height="48" alt=""><figcaption>48</figcaption></figure>
+      <figure><img src="png/apple-touch-icon-180.png" width="90" height="90" alt=""><figcaption>apple-touch 180</figcaption></figure>
+    </div>
+  </section>
+
+  <p style="color:var(--color-fg-muted); font-size:var(--text-sm)">Toggle <code>data-theme="dark"</code> on &lt;html&gt; to preview Ember. Full spec in DESIGN-LANGUAGE.md.</p>
+
+</body>
+</html>
