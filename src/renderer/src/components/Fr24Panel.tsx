@@ -56,7 +56,14 @@ function Fr24Panel(): React.JSX.Element {
       ro.disconnect()
       window.removeEventListener('resize', scheduleMeasure)
       window.removeEventListener(FR24_RELAYOUT_EVENT, scheduleMeasure)
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current)
+        // Reset the guard, or a StrictMode remount (dev React mounts twice)
+        // sees a stale id and skips every future measure — the view then never
+        // receives bounds and stays invisible in `just dev` while production
+        // builds work. Only measure() itself clears the ref otherwise.
+        rafRef.current = null
+      }
     }
   }, [scheduleMeasure])
 
