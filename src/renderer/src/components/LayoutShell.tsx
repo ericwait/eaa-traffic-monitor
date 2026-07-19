@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import Fr24Panel from './Fr24Panel'
 import AboutModal from './AboutModal'
+import VideoGrid from './VideoGrid'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
 
 // The three-panel walking skeleton: ATC audio (left), flight tracking (top
@@ -76,16 +77,11 @@ function LayoutShell(): React.JSX.Element {
               <Separator className="separator separator-horizontal" />
 
               <Panel id="video" className="panel video-panel" defaultSize="38" minSize="12">
-                <section className="placeholder" aria-label="Live Video">
+                <section className="video-panel-section" aria-label="Live Video">
                   <header className="panel-head">
                     <h2 className="panel-title">Live Video</h2>
                   </header>
-                  <div className="placeholder-body">
-                    <p className="placeholder-note">
-                      The EAA YouTube live-feed grid — tiled, emphasizable, per-feed audio — lands
-                      here in Phase 3.
-                    </p>
-                  </div>
+                  <VideoGrid />
                 </section>
               </Panel>
             </Group>
