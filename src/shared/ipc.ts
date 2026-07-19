@@ -12,6 +12,7 @@
 // config module, so the IPC payloads speak in the same validated shape.
 
 import type { AppConfig } from './defaultConfig'
+import type { WeatherMetar, WeatherTaf } from './weather'
 
 // ---------------------------------------------------------------------------
 // Channel names. Referenced by constant everywhere so a rename is a single edit
@@ -35,7 +36,13 @@ export const IpcChannels = {
   /** renderer -> main (invoke): re-read config.json from disk (Phase 2a). */
   configReload: 'config:reload',
   /** renderer -> main (invoke): resolve a stream id to a playable URL (Phase 2a). */
-  audioResolveStream: 'audio:resolveStream'
+  audioResolveStream: 'audio:resolveStream',
+  /** renderer -> main (invoke): read the current field-weather snapshot (cached, or a fresh fetch if stale). */
+  weatherGet: 'weather:get',
+  /** renderer -> main (invoke): force a fresh METAR/TAF fetch, bypassing the cache (the panel's refresh button). */
+  weatherRefresh: 'weather:refresh',
+  /** main -> renderer: push a background-poll weather result to the panel. */
+  weatherUpdate: 'weather:update'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -146,6 +153,7 @@ export interface AppApi {
   session: SessionApi
   config: ConfigApi
   audio: AudioApi
+  weather: WeatherApi
 }
 
 // ---------------------------------------------------------------------------
@@ -202,4 +210,52 @@ export interface AudioApi {
    * waits on a real network or a user gesture. Not for feature logic.
    */
   readonly isE2E: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Weather payloads. Field-weather (METAR/TAF) is fetched from the NOAA
+// aviationweather.gov Data API in the main process (see
+// docs/development/TechStack.md and src/main/weather.ts), cached, and polled
+// no more often than the configured interval. Like `ResolveStreamResult`, a
+// fetch failure is a typed result, never a throw across IPC — the panel shows
+// a stale/error state instead of an unhandled rejection.
+// ---------------------------------------------------------------------------
+
+/** One fetched-and-derived snapshot: current METAR + TAF for one station. */
+export interface WeatherSnapshot {
+  /** ICAO station id, e.g. "KOSH". */
+  station: string
+  /** The poll interval in effect when this snapshot was fetched, in minutes — carried along so the UI can compute "stale" without a second round-trip to read config. */
+  pollMinutes: number
+  /** When this snapshot was fetched, epoch ms. */
+  fetchedAt: number
+  /** Null only if the API returned no METAR for the station (rare, but possible). */
+  metar: WeatherMetar | null
+  /** Null only if the API returned no TAF for the station. */
+  taf: WeatherTaf | null
+}
+
+/** Category of a weather-fetch failure. */
+export type WeatherFailureKind = 'network' | 'parse' | 'unknown'
+
+/**
+ * The outcome of `weather:get` / `weather:refresh` (and background pushes on
+ * `weather:update`). On failure, `stale` carries the last successfully fetched
+ * snapshot (if any) so the panel can keep showing last-known conditions with a
+ * visible "stale"/error indicator — graceful degradation, never a blank panel.
+ */
+export type WeatherResult =
+  | { ok: true; snapshot: WeatherSnapshot }
+  | { ok: false; kind: WeatherFailureKind; error: string; stale: WeatherSnapshot | null }
+
+export interface WeatherApi {
+  /** Read the current snapshot: cached if still fresh, otherwise a fresh fetch. */
+  get(): Promise<WeatherResult>
+  /** Force a fresh fetch, bypassing the cache-freshness check (the refresh button). */
+  refresh(): Promise<WeatherResult>
+  /**
+   * Subscribe to background-poll pushes. Returns an unsubscribe function; call
+   * it on teardown so a re-mount (React StrictMode, HMR) never stacks listeners.
+   */
+  onUpdate(listener: (result: WeatherResult) => void): () => void
 }
