@@ -1,6 +1,6 @@
 # DragonPlane — visual language
 
-The mark for the EAA AirVenture traffic monitor.
+The mark for the airshow traffic monitor.
 A top-down view of a WWII-era, twin-prop warbird whose wings are dragon/bat wings.
 Icon-only: there is no wordmark.
 

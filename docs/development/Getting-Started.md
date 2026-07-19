@@ -42,8 +42,8 @@ A headless machine needs `xvfb` to run `just e2e` (CI does this automatically).
 ## Clone and run
 
 ```bash
-git clone https://github.com/ericwait/eaa-traffic-monitor.git
-cd eaa-traffic-monitor
+git clone https://github.com/ericwait/airshow-traffic-monitor.git
+cd airshow-traffic-monitor
 just dev
 ```
 
@@ -58,7 +58,7 @@ Quit the app the normal way (Cmd-Q, or close the window) — there is no backgro
 
 ### What you should see
 
-A dark desktop window titled **EAA Traffic Monitor**, split into three resizable panels:
+A dark desktop window titled **Airshow Traffic Monitor**, split into three resizable panels:
 
 - **Left — ATC Audio.**
   Eight stream strips — Emergency/Guard, Tower, Fisk VFR Approach, Del/Gnd/Misc, Departure Monitor, South Tower, Air Show, and ATIS — each with an activity light, a status chip (`connecting` / `live` / `reconnecting·n` / `error`), a volume slider, a mute button, a pan control, a solo button, a priority-rank badge (P1 highest), and an output-device picker.
@@ -111,9 +111,9 @@ The curated defaults get you listening and watching immediately, but everything 
 
 | OS | Path |
 | --- | --- |
-| macOS | `~/Library/Application Support/eaa-traffic-monitor/config.json` |
-| Windows | `%APPDATA%\eaa-traffic-monitor\config.json` |
-| Linux | `~/.config/eaa-traffic-monitor/config.json` |
+| macOS | `~/Library/Application Support/airshow-traffic-monitor/config.json` |
+| Windows | `%APPDATA%\airshow-traffic-monitor\config.json` |
+| Linux | `~/.config/airshow-traffic-monitor/config.json` |
 
 The app writes this file with the compiled defaults the first time it runs, then leaves it alone.
 Edit it in any text editor — add a stream, swap a `.pls` mount, change a priority rank, retune the `vad` block — then click **Refresh config from disk** in the ATC Audio panel header to apply the change without restarting the app.

@@ -1,12 +1,13 @@
-# EAA Traffic Monitor
+# Airshow Traffic Monitor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**[View the project page](https://ericwait.github.io/eaa-traffic-monitor/)**
+**[View the project page](https://ericwait.github.io/airshow-traffic-monitor/)**
 
 I would like to create an app that helps me monitor multiple websites and audio streams at once for the traffic going in and out of Oshkosh during the EAA annual airshow.
 There are three main ways of monitoring the air traffic in and out of Oshkosh that I would like this app to manage.
 These include audio streams, YouTube live feeds, and live flight radar information.
+The project name is deliberately airshow-generic — EAA AirVenture Oshkosh is the first target, not the boundary (decision 2026-07-19).
 
 ## Audio Streams
 

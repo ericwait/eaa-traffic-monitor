@@ -1,10 +1,10 @@
 {
-  "name": "eaa-traffic-monitor",
+  "name": "airshow-traffic-monitor",
   "version": "0.0.0",
-  "description": "Unified desktop dashboard for monitoring EAA AirVenture air traffic — ATC audio, YouTube live feeds, and a FlightRadar24 browser panel.",
+  "description": "Unified desktop dashboard for monitoring airshow air traffic — ATC audio, YouTube live feeds, and a FlightRadar24 browser panel. Built first for EAA AirVenture.",
   "author": "Eric Wait",
   "license": "MIT",
-  "homepage": "https://github.com/ericwait/eaa-traffic-monitor",
+  "homepage": "https://github.com/ericwait/airshow-traffic-monitor",
   "main": "./out/main/index.js",
   "engines": {
     "node": ">=20.19.0"

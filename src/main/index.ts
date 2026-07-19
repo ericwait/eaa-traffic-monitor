@@ -77,7 +77,7 @@ function createWindow(): void {
     height: 800,
     show: false,
     backgroundColor: '#0b0f14',
-    title: 'EAA Traffic Monitor',
+    title: 'Airshow Traffic Monitor',
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -135,7 +135,7 @@ app
   .then(() => {
     // Set the AppUserModelId on Windows so notifications and taskbar grouping
     // attribute to this app rather than the generic Electron identity.
-    electronApp.setAppUserModelId('com.ericwait.eaa-traffic-monitor')
+    electronApp.setAppUserModelId('com.ericwait.airshow-traffic-monitor')
 
     // Wire the app:// scheme to the packaged renderer files whenever we are not
     // pointed at the dev server (same discriminator as the load path above).
