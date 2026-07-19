@@ -1,5 +1,5 @@
 /**
- * DragonPlane design tokens (framework-agnostic).
+ * Wyvern Watch design tokens (framework-agnostic).
  *
  * Mirror of tokens.css for TypeScript consumers. Pure data — no DOM or Electron
  * imports — so it is safe to place under `src/shared/` and import via `@shared/*`
