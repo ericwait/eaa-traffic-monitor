@@ -17,6 +17,19 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- ATC audio core: the eight curated KOSH LiveATC feeds play simultaneously from
+  an editable `config.json`, each with its own volume, mute, and stereo pan.
+  Muting drops a channel to silence but keeps watching it, so a muted channel's
+  activity light still shows when it is talking.
+- Per-channel activity lights driven by adaptive, squelch-aware voice detection
+  (it learns each channel's noise floor and bridges the gaps between words), kept
+  distinct from a connection status chip (connecting / live / reconnecting /
+  error) so a live-but-silent frequency never reads as a fault.
+- Automatic, indefinite reconnection: a dropped or stalled stream re-resolves
+  onto a fresh host and self-heals with exponential backoff, unattended.
+- A "Reload config" button applies edits to `config.json` live; an invalid file
+  falls back to the built-in defaults and shows a banner naming the file and the
+  error rather than failing to start.
 - Live Video panel: a YouTube grid tiling the curated EAA cams (Warbirds,
   Ultralights, Seaplane Base, Green Dot, Vintage, Boeing Plaza, and the
   opening-weekend featured stream), in a uniform grid or an emphasized

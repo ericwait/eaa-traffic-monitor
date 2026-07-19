@@ -10,16 +10,26 @@
       YouTube IFrame API (youtube.com frames) and FR24 WebContentsView needs
       land — do that deliberately, per-source, never with a blanket wildcard.
 
+      Phase 2a: media-src is opened to https://*.liveatc.net so the ATC <audio>
+      elements can load their streams directly. The mounts are CORS-open
+      (access-control-allow-origin: *), so a cross-origin crossorigin="anonymous"
+      load is analysed by Web Audio without a proxy — verified live against real
+      KOSH feeds. A scoped per-source relaxation, never a blanket wildcard.
+
       Phase 3: the YouTube grid needs exactly two additions, both scoped to
       youtube.com specifically (never a wildcard) — script-src for the
       https://www.youtube.com/iframe_api loader tag, and frame-src (not
       previously declared, so it fell back to default-src) for the actual
       <iframe> YT.Player inserts. FR24 needs no CSP relaxation: it is a
       main-process WebContentsView, not a renderer-loaded frame.
+
+      NOTE: this must remain ONE meta tag. Two CSP metas both apply and the
+      browser enforces their INTERSECTION — a directive missing from either
+      would silently re-block the other phase's sources.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app: https://www.youtube.com; frame-src 'self' app: https://www.youtube.com"
+      content="default-src 'self' app:; style-src 'self' 'unsafe-inline' app:; img-src 'self' app: data:; script-src 'self' app: https://www.youtube.com; frame-src 'self' app: https://www.youtube.com; media-src 'self' https://*.liveatc.net"
     />
     <meta name="referrer" content="unsafe-url" />
     <title>EAA Traffic Monitor</title>

@@ -7,6 +7,11 @@
 // This module MUST stay free of Electron and DOM APIs (see src/shared/README.md)
 // so it can be imported by the main process, the preload, the renderer, and
 // vitest alike. It is plain string constants plus types — nothing more.
+//
+// The one import is a TYPE-only pull of AppConfig from the (pure, zod-only)
+// config module, so the IPC payloads speak in the same validated shape.
+
+import type { AppConfig } from './defaultConfig'
 
 // ---------------------------------------------------------------------------
 // Channel names. Referenced by constant everywhere so a rename is a single edit
@@ -24,7 +29,13 @@ export const IpcChannels = {
   /** renderer -> main (invoke): read the persisted session state. */
   sessionGet: 'session:get',
   /** renderer -> main: shallow-merge a patch into the persisted session state. */
-  sessionPatch: 'session:patch'
+  sessionPatch: 'session:patch',
+  /** renderer -> main (invoke): read + validate config.json (Phase 2a). */
+  configGet: 'config:get',
+  /** renderer -> main (invoke): re-read config.json from disk (Phase 2a). */
+  configReload: 'config:reload',
+  /** renderer -> main (invoke): resolve a stream id to a playable URL (Phase 2a). */
+  audioResolveStream: 'audio:resolveStream'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -107,4 +118,62 @@ export interface SessionApi {
 export interface AppApi {
   fr24: Fr24Api
   session: SessionApi
+  config: ConfigApi
+  audio: AudioApi
+}
+
+// ---------------------------------------------------------------------------
+// Config payloads (Phase 2a). config.json is read + zod-validated in the main
+// process; an invalid file falls back to the compiled defaults and the renderer
+// shows a dismissible banner naming the file path and the validation error.
+// ---------------------------------------------------------------------------
+
+/** Where the active config came from: a valid file, or the compiled fallback. */
+export type ConfigSource = 'file' | 'defaults-fallback'
+
+/** The result of reading/validating config.json. Always yields a usable config. */
+export interface ConfigResult {
+  /** The validated, app-facing configuration (defaults if the file was bad). */
+  config: AppConfig
+  /** 'file' when the on-disk config was valid; 'defaults-fallback' otherwise. */
+  source: ConfigSource
+  /** Absolute path to config.json, so the banner can name the file to fix. */
+  filePath: string
+  /** Present only on 'defaults-fallback': the parse/validation error text. */
+  error?: string
+}
+
+export interface ConfigApi {
+  /** Read + validate config.json (cached after first read). */
+  get(): Promise<ConfigResult>
+  /** Re-read config.json from disk (the "Reload config" button). */
+  reload(): Promise<ConfigResult>
+}
+
+// ---------------------------------------------------------------------------
+// Audio payloads (Phase 2a). Stream resolution runs in the main process (browser
+// UA, redirect-following) and returns a typed result — never a bare throw across
+// IPC — so a failure reaches the UI as a status-chip state with a real message.
+// ---------------------------------------------------------------------------
+
+/** Category of a resolve failure — drives whether the UI reads it as recoverable. */
+export type ResolveFailureKind = 'network' | 'parse' | 'notfound' | 'unknown'
+
+/** The outcome of `audio:resolveStream`. */
+export type ResolveStreamResult =
+  | { ok: true; streamId: string; finalUrl: string; title: string }
+  | { ok: false; streamId: string; kind: ResolveFailureKind; error: string }
+
+export interface AudioApi {
+  /**
+   * Resolve a stream id to a playable final URL. Pass `{ fresh: true }` on every
+   * reconnect so resolution re-lands on a fresh rotating host.
+   */
+  resolveStream(streamId: string, opts?: { fresh?: boolean }): Promise<ResolveStreamResult>
+  /**
+   * True when launched under the e2e harness (AUDIO_E2E). The engine uses it to
+   * shorten reconnect backoff and skip audible autoplay so the smoke test never
+   * waits on a real network or a user gesture. Not for feature logic.
+   */
+  readonly isE2E: boolean
 }

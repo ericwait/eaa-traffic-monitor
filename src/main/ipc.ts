@@ -1,8 +1,10 @@
 import { ipcMain } from 'electron'
-import type { Fr24Bounds, Fr24NavAction, SessionPatch } from '@shared/ipc'
+import type { Fr24Bounds, Fr24NavAction, ResolveStreamResult, SessionPatch } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
 import type { Fr24Controller } from './fr24'
 import { getSessionState, patchSessionState } from './session'
+import { getConfig, reloadConfig } from './config'
+import { clearResolveCache, resolveStream } from './plsResolver'
 
 // Main-side IPC registration for Phase 1: the FR24 view channels plus the
 // minimal session get/patch. Hand-rolled against the shared contract — one
@@ -64,11 +66,59 @@ export function registerIpc(fr24: Fr24Controller): () => void {
     patchSessionState(patch as SessionPatch)
   })
 
+  // --- Config (Phase 2a) --------------------------------------------------
+  // Reading and validation never throw (config.ts degrades to defaults), so the
+  // handlers just forward the result. Reload also drops the resolve cache so the
+  // next connect re-resolves against any newly-edited plsUrls.
+  ipcMain.handle(IpcChannels.configGet, () => getConfig())
+
+  ipcMain.handle(IpcChannels.configReload, () => {
+    const result = reloadConfig()
+    clearResolveCache()
+    return result
+  })
+
+  // --- Audio (Phase 2a) ---------------------------------------------------
+  // resolveStream returns a typed success/failure — never throws across IPC —
+  // so a bad mount surfaces as a status chip, not an unhandled rejection.
+  ipcMain.handle(
+    IpcChannels.audioResolveStream,
+    async (_e, streamId: unknown, opts: unknown): Promise<ResolveStreamResult> => {
+      if (typeof streamId !== 'string' || streamId.length === 0) {
+        return {
+          ok: false,
+          streamId: String(streamId),
+          kind: 'unknown',
+          error: 'resolveStream called without a valid stream id'
+        }
+      }
+      const fresh =
+        typeof opts === 'object' && opts !== null && (opts as { fresh?: unknown }).fresh === true
+      try {
+        return await resolveStream(streamId, { fresh })
+      } catch (err: unknown) {
+        // Defensive: resolveStream is written not to throw, but IPC must never
+        // reject — a rejection would reach the renderer as an opaque error.
+        return {
+          ok: false,
+          streamId,
+          kind: 'unknown',
+          error: `unexpected error resolving "${streamId}": ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        }
+      }
+    }
+  )
+
   return () => {
     ipcMain.removeAllListeners(IpcChannels.fr24SetBounds)
     ipcMain.removeAllListeners(IpcChannels.fr24Nav)
     ipcMain.removeAllListeners(IpcChannels.fr24SetVisible)
     ipcMain.removeHandler(IpcChannels.sessionGet)
     ipcMain.removeAllListeners(IpcChannels.sessionPatch)
+    ipcMain.removeHandler(IpcChannels.configGet)
+    ipcMain.removeHandler(IpcChannels.configReload)
+    ipcMain.removeHandler(IpcChannels.audioResolveStream)
   }
 }

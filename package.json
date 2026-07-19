@@ -30,6 +30,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "electron-store": "^11.0.2",
     "react-resizable-panels": "^4.12.2",
+    "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
