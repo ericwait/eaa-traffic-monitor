@@ -30,11 +30,14 @@ export type RendererUrlResolver = (query: string) => Promise<string>
 export class PopoutManager {
   private readonly windows = new Map<number, BrowserWindow>()
   private readonly resolveUrl: RendererUrlResolver
+  /** Runtime window icon (Windows/Linux); undefined on macOS (uses the .icns). */
+  private readonly icon: string | undefined
   /** True once the app is quitting: close pop-outs WITHOUT wiping their slices. */
   private quitting = false
 
-  constructor(resolveUrl: RendererUrlResolver) {
+  constructor(resolveUrl: RendererUrlResolver, icon?: string) {
     this.resolveUrl = resolveUrl
+    this.icon = icon
   }
 
   /** Mark that the app is quitting so pop-out closes preserve the session for restore. */
@@ -100,6 +103,7 @@ export class PopoutManager {
       show: false,
       backgroundColor: '#0b0f14',
       title: `Airshow Video — window ${id}`,
+      ...(this.icon ? { icon: this.icon } : {}),
       autoHideMenuBar: true,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
