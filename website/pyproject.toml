@@ -1,0 +1,23 @@
+# Python toolchain for the documentation site ONLY — a deliberately isolated,
+# uv-managed island in an otherwise TypeScript repo (decision 2026-07-18: the
+# docs site is MkDocs Material). The app itself has NO Python; nothing here is
+# imported by the Electron build. `just site` / `just site-preview` and the
+# Pages workflow are the only callers.
+#
+# Content lives in ../docs (see mkdocs.yml `docs_dir`); this directory holds
+# only the machinery that renders it. Pin exact-ish minimums and commit uv.lock
+# so CI and a laptop resolve the identical dependency graph.
+[project]
+name = "airshow-traffic-monitor-docs"
+version = "0.0.0"
+description = "MkDocs Material site generator for the Airshow Traffic Monitor docs (content lives in ../docs)."
+requires-python = ">=3.11"
+dependencies = [
+    "mkdocs-material>=9.5,<10",
+    "pymdown-extensions>=10.7",
+]
+
+[tool.uv]
+# No application package to build here — this project is a dependency set that
+# provides the `mkdocs` console script, not an importable library.
+package = false

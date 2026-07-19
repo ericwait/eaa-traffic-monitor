@@ -1,4 +1,4 @@
-> Status: draft | Audience: anyone designing or building audio behavior in the app | See also: [Video.md](Video.md), [Tracking.md](Tracking.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md), [../../README.md](../../README.md)
+> Status: draft | Audience: anyone designing or building audio behavior in the app | See also: [Video.md](Video.md), [Tracking.md](Tracking.md), [Personas.md](Personas.md), [../development/TechStack.md](../development/TechStack.md), [README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md)
 
 # Audio
 
@@ -15,7 +15,7 @@ The manual prototype this app replaces ran six separate media players stacked in
 
 Several live radio streams are fine while only one channel is talking.
 The moment calls overlap across channels — routine at Oshkosh — the combined audio becomes unintelligible, and, worse, the operator cannot tell *which* stream a given call is coming from.
-That is the core problem the [README](../../README.md) names, and the whole audio system exists to answer it three ways:
+That is the core problem the [README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md) names, and the whole audio system exists to answer it three ways:
 
 1. **Show who's talking at a glance.**
    Every ATC channel carries an activity light driven by its live signal, so the operator can look instead of straining to pick one voice out of the wall.
@@ -56,7 +56,7 @@ Their causes are recorded below and in [Video.md](Video.md) and [Tracking.md](Tr
   Each channel has its own volume, independent of every other.
 - **Mute that keeps the light alive.**
   Muting a channel drops what you *hear* to zero but never stops the app from *watching* it — so a muted channel's activity light still shows it talking.
-  This is deliberate and is exactly what the [README](../../README.md) asks for: you mute a channel you don't want in your ears right now, yet still want to see the moment it comes alive so you can bring it back.
+  This is deliberate and is exactly what the [README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md) asks for: you mute a channel you don't want in your ears right now, yet still want to see the moment it comes alive so you can bring it back.
   (Mute lowers the channel's own volume to zero; it does not silence the analysis feeding the light.)
 - **Activity lights.**
   Each channel's light is driven by adaptive, squelch-aware detection: the app measures the stream's live signal level (via the runtime's audio graph) and learns each channel's own noise floor, lighting only when a real transmission rises above it.

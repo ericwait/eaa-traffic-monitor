@@ -41,6 +41,14 @@ coverage/
 /.playwright/
 /playwright/.cache/
 
+# --- Docs site (MkDocs Material, machinery in website/) -----------------------
+# The uv-managed virtualenv and the generated site are build artifacts, never
+# committed. website/pyproject.toml + website/uv.lock ARE committed (the pinned
+# toolchain). The Pages workflow rebuilds website/site/ from scratch.
+website/.venv/
+website/site/
+.cache/
+
 # --- Local data --------------------------------------------------------------
 # Real data never enters git. Exports, dumps, and fixtures derived from a live
 # session belong on disk only.

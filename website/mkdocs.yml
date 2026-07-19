@@ -1,0 +1,113 @@
+# MkDocs Material configuration for the public documentation site
+# (decision 2026-07-18: MkDocs Material generates the site from docs/).
+#
+# THE CONTENT IS NOT HERE. Every page is authored under ../docs and stays there;
+# this file is only the renderer. Editing prose means editing docs/*.md, never
+# this file. `docs_dir` below points the build at that tree.
+#
+# Home page: docs/README.md. MkDocs serves a directory's README.md OR index.md as
+# its index.html — and the two collide if both exist. docs/README.md wins here on
+# purpose (decision 2026-07-19): docs/Implementation-Plan.md links to `README.md`
+# and that file is plan-frozen, so README.md must stay the resolvable root page;
+# a docs/index.md would shadow it and break that link under `--strict`. The old
+# hand-written docs/index.html landing page is deleted — README.md is now the
+# generated, drift-proof home it pointed at.
+#
+# Build it with `just site` (strict) and preview with `just site-preview`.
+site_name: Airshow Traffic Monitor
+site_description: >-
+  One desktop dashboard for monitoring airshow air traffic — simultaneous ATC
+  audio, a YouTube live-feed grid, and an embedded FlightRadar24 panel.
+site_url: https://ericwait.github.io/airshow-traffic-monitor/
+site_author: Eric Wait
+
+# Source-of-truth content tree. Relative to THIS file (website/), so ../docs is
+# the repository's docs/ directory — machinery in website/, content in docs/.
+docs_dir: ../docs
+# Build output. Gitignored; the Pages workflow uploads it. Kept under website/ so
+# a stray local build never litters the repo root.
+site_dir: site
+
+repo_url: https://github.com/ericwait/airshow-traffic-monitor
+repo_name: ericwait/airshow-traffic-monitor
+# "Edit this page" points at the file under docs/ on the default branch.
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  palette:
+    # Respect the visitor's OS theme, with a manual toggle either way.
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: deep orange
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: deep orange
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  # Mermaid renders NATIVELY: Material ships the mermaid runtime and turns this
+  # fenced block into a live diagram. The flowchart in the implementation plan
+  # renders as a diagram, not a code block (Phase 5 exit criterion).
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+# Strict-build link hygiene: warn (→ error under --strict) on any link or
+# anchor that does not resolve inside docs/. Links that legitimately escape
+# docs/ (root README, CLAUDE.md, src/, .github/) are rewritten to absolute
+# GitHub URLs in the source — see the Phase 5 link-hygiene pass.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+nav:
+  - Home: README.md
+  - Design:
+      - Personas: design/Personas.md
+      - Stakeholders:
+          - Casual Spotter: design/Stakeholders/Casual-Spotter.md
+          - Command Center Enthusiast: design/Stakeholders/Command-Center-Enthusiast.md
+          - Programmer Aviator: design/Stakeholders/Programmer-Aviator.md
+      - Audio: design/Audio.md
+      - Video: design/Video.md
+      - Tracking: design/Tracking.md
+  - Development:
+      - Tech stack: development/TechStack.md
+      - Getting started: development/Getting-Started.md
+      - Testing: development/Testing.md
+      - Pages deployment runbook: development/Pages-deployment-runbook.md
+  - Implementation plan: Implementation-Plan.md
+  - Decisions: decisions/README.md
