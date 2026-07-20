@@ -7,12 +7,16 @@ import {
 } from '@shared/weather'
 import type { WeatherTafPeriod } from '@shared/weather'
 import { useAppStore } from '../state/store'
+import PanelChromeButtons from '../layout/PanelChromeButtons'
+import { panelHeadClassName } from '../layout/panelMeta'
 
 // The "Field Weather" card — a compact METAR/TAF summary for the tracked
-// station, mounted below the ATC stream list inside the ATC panel's slot (see
-// AudioPanel.tsx). It reads the shared, pure flight-category/TAF logic
-// (src/shared/weather.ts) so the exact same derivation that vitest exercises
-// against real API fixtures is what renders here — no re-decoding in the UI.
+// station, its own top-level panel on the canvas (decision 2026-07-19 — it
+// was previously nested below the ATC stream list inside AudioPanel; see
+// layout/LeafFrame.tsx, which mounts this for the 'weather' panel id). It
+// reads the shared, pure flight-category/TAF logic (src/shared/weather.ts) so
+// the exact same derivation that vitest exercises against real API fixtures
+// is what renders here — no re-decoding in the UI.
 //
 // Data flow mirrors fr24:navState: an initial `weather:get` on mount for the
 // first paint, then a subscription to background-poll pushes
@@ -25,6 +29,9 @@ const STALE_POLL_MULTIPLIER = 2
 
 /** Re-render once a minute so the observation-age readout stays live without a real poll happening. */
 const AGE_TICK_MS = 60_000
+
+const PANEL_ID = 'weather' as const
+const PANEL_TITLE = 'Field Weather'
 
 function formatAge(fromMs: number, nowMs: number): string {
   const minutes = Math.max(0, Math.round((nowMs - fromMs) / 60_000))
@@ -66,6 +73,8 @@ function WeatherPanel(): React.JSX.Element {
   const loading = useAppStore((s) => s.weatherLoading)
   const setWeatherResult = useAppStore((s) => s.setWeatherResult)
   const setWeatherLoading = useAppStore((s) => s.setWeatherLoading)
+  const toggleMaximize = useAppStore((s) => s.toggleMaximize)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
 
   const [now, setNow] = useState(() => Date.now())
 
@@ -115,8 +124,11 @@ function WeatherPanel(): React.JSX.Element {
 
   return (
     <section className="weather-panel" aria-label="Field Weather" data-testid="weather-panel">
-      <header className="panel-head weather-head">
-        <h2 className="panel-title">Field Weather</h2>
+      <header
+        className={panelHeadClassName('panel-head weather-head', PANEL_ID, dragPanelId)}
+        onDoubleClick={() => toggleMaximize(PANEL_ID)}
+      >
+        <h2 className="panel-title">{PANEL_TITLE}</h2>
         <div className="audio-head-spacer" />
         {isStale && (
           <span
@@ -138,6 +150,7 @@ function WeatherPanel(): React.JSX.Element {
         >
           &#8635;
         </button>
+        <PanelChromeButtons panelId={PANEL_ID} title={PANEL_TITLE} />
       </header>
 
       {error && (

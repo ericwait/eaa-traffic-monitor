@@ -11,7 +11,9 @@
 // The one import is a TYPE-only pull of AppConfig from the (pure, zod-only)
 // config module, so the IPC payloads speak in the same validated shape.
 
-import type { AppConfig } from './defaultConfig'
+import type { AppConfig, StreamConfig } from './defaultConfig'
+import type { LiveAtcFeed } from './liveatcDirectory'
+import type { LayoutNode, PanelId, PanelLayoutSession, VideoFitMode } from './panelLayout'
 import type { WeatherMetar, WeatherTaf } from './weather'
 
 // ---------------------------------------------------------------------------
@@ -31,10 +33,16 @@ export const IpcChannels = {
   sessionGet: 'session:get',
   /** renderer -> main: shallow-merge a patch into the persisted session state. */
   sessionPatch: 'session:patch',
+  /** renderer -> main (invoke): set the app theme (System/Cream/Ember); drives nativeTheme.themeSource. */
+  themeSet: 'theme:set',
   /** renderer -> main (invoke): read + validate config.json (Phase 2a). */
   configGet: 'config:get',
   /** renderer -> main (invoke): re-read config.json from disk (Phase 2a). */
   configReload: 'config:reload',
+  /** renderer -> main (invoke): replace the streams block of config.json (channel manager). */
+  configUpdateStreams: 'config:updateStreams',
+  /** renderer -> main (invoke): fetch + parse the LiveATC feed directory for one airport. */
+  liveatcSearch: 'liveatc:search',
   /** renderer -> main (invoke): resolve a stream id to a playable URL (Phase 2a). */
   audioResolveStream: 'audio:resolveStream',
   /** renderer -> main (invoke): read the current field-weather snapshot (cached, or a fresh fetch if stale). */
@@ -50,7 +58,25 @@ export const IpcChannels = {
   /** renderer(popout) -> main: persist this pop-out's layout / per-feed volumes (Phase 4). */
   windowsPatchPopout: 'windows:patchPopout',
   /** main -> renderer: the set of currently open pop-outs, for feed hand-off (Phase 4). */
-  windowsPopoutsChanged: 'windows:popoutsChanged'
+  windowsPopoutsChanged: 'windows:popoutsChanged',
+  /**
+   * renderer(popout) -> main (invoke): merge this pop-out's feeds into another
+   * open pop-out's window, then close this one — the "Merge into…" control
+   * (decision 2026-07-20; see docs/design/Video.md § Pop-outs and restore).
+   */
+  windowsMergePopout: 'windows:mergePopout',
+  /**
+   * renderer -> main: the current panel set (open/closed + maximized), so the
+   * native application menu's Panels checkboxes render correct state (PR4 of
+   * the panel-system effort — see docs/Panel-System-Plan.md § File inventory).
+   * Sent on every panel-tree/maximize change, not just once at startup.
+   */
+  layoutMenuSync: 'layout:menuSync',
+  /**
+   * main -> renderer: forward a native-menu click (a Panels checkbox toggle,
+   * "Reset to Default Layout") for the renderer's store to act on.
+   */
+  layoutCommand: 'layout:command'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -96,6 +122,16 @@ export interface Fr24NavState {
 // ---------------------------------------------------------------------------
 
 /**
+ * The app's theme selection (Wyvern Watch reskin, decision 2026-07-19):
+ * 'system' follows the OS via `nativeTheme.themeSource`; 'light'/'dark' force
+ * Cream Classic / Ember regardless of the OS setting. Set through `theme:set`
+ * in the main process (never per-renderer CSS), so every window — including
+ * pop-outs — and the OS chrome follow a single change instantly. Persisted in
+ * `SessionState.theme`; default 'system'.
+ */
+export type ThemeMode = 'system' | 'light' | 'dark'
+
+/**
  * A remembered output-device choice for one ATC stream. Both fields are stored:
  * the `deviceId` is tried first, and the human `deviceLabel` is the match-by-name
  * fallback when a device replug hands the same physical output a fresh id.
@@ -136,7 +172,16 @@ export interface WindowBoundsState {
   displayId: number | null
 }
 
-/** The video grid's cross-tile layout — the shared decisions VideoGrid reacts to. */
+/**
+ * The old video grid's cross-tile layout (uniform/emphasized/fill-panel).
+ * Retired everywhere the layout itself is concerned (decision 2026-07-20:
+ * both the main window and pop-outs now use the panel canvas's maximize +
+ * per-feed fit/fill instead — see `PopoutState.tree`/`videoFit`) — kept only
+ * because `OpenPopoutRequest.layout` still carries this shape for a NEW
+ * pop-out's launch request; `PopoutManager.openPopout` (`src/main/popouts.ts`)
+ * no longer reads it (the initial tree comes from `buildBalancedGrid` over
+ * the request's `feedIds` instead).
+ */
 export interface VideoLayoutState {
   mode: 'uniform' | 'emphasized'
   /** Feed id in the emphasized "big" tile; null in uniform mode. */
@@ -151,14 +196,41 @@ export interface FeedAudioState {
   muted: boolean
 }
 
-/** One pop-out window's persisted slice — its own bounds/display, feeds, layout, volumes. */
+/**
+ * One pop-out window's persisted slice — its own bounds/display, feeds,
+ * panel-canvas layout, volumes.
+ *
+ * (decision 2026-07-20) A pop-out renders the SAME panel canvas the main
+ * window uses (`tree` is a `LayoutNode` of `video:` leaves only — see
+ * `src/shared/panelLayout.ts`), rearrangeable by the operator exactly like
+ * the main window's panels: split, resize, drag-to-dock, maximize, and
+ * per-feed fit/fill. This retires the old `video: VideoLayoutState`
+ * uniform/emphasized/fill-panel grid for pop-outs (the main window retired
+ * the same modes a phase earlier — see docs/decisions/README.md), in favor
+ * of maximize + `videoFit`; the Layout Manager and named profiles stay
+ * main-window-only. See docs/design/Layout.md's pop-out section.
+ */
 export interface PopoutState {
   /** Stable per-session id; also the `?id=` the pop-out renderer loads under. */
   id: number
   bounds: WindowBoundsState
   /** The feeds this pop-out manages (handed off from the main grid while open). */
   feedIds: string[]
-  video: VideoLayoutState
+  /**
+   * This pop-out's own panel-canvas split tree, rendered by the SAME
+   * `PanelCanvas`/`LeafFrame` the main window uses (via a local-state
+   * `LayoutController` — see `renderer/src/layout/usePopoutLayout.ts`), not
+   * the global store. `null` only when `feedIds` is empty (a tree needs at
+   * least one leaf) — the pop-out renderer shows its existing "no feeds
+   * assigned" message instead of mounting the canvas. A missing/corrupt tree
+   * is never fatal: the never-throw sanitizer (`sanitizePopout`, `@shared/
+   * session`) rebuilds a fresh balanced grid from `feedIds` via
+   * `buildBalancedGrid` (mirrors `sanitizePanelLayoutSession`'s own
+   * drop-and-default contract for the main window).
+   */
+  tree: LayoutNode | null
+  /** Per-feed fit/fill mode for THIS pop-out's tiles, keyed by bare feed id (not the `video:` panel id). Absent = 'fit'. */
+  videoFit: Record<string, VideoFitMode>
   /** Per-feed audio for this pop-out's tiles, keyed by feed id. */
   volumes: Record<string, FeedAudioState>
 }
@@ -180,15 +252,22 @@ export interface SessionState {
   /** Main-window bounds + display, or null before the first save. */
   window: WindowBoundsState | null
   /**
-   * Resizable panel layout, keyed by the react-resizable-panels storage key. The
-   * values are the library's own serialized layout strings — the renderer wires a
-   * `LayoutStorage` adapter over this map, so the app never parses them itself.
+   * The panel-system split tree, maximize/fit state, and named profiles (see
+   * src/shared/panelLayout.ts), rendered by the single-container canvas
+   * (decision 2026-07-19; see docs/decisions/README.md). `null` before the
+   * first commit, and for every pre-existing session — an old build wrote the
+   * now-removed `layout` (react-resizable-panels' own `LayoutStorage` strings)
+   * and top-level `video` (VideoLayoutState) fields instead; migration is
+   * drop-and-default, so those keys simply stop being read/written and an old
+   * session.json loads with `panelLayout: null` (the caller substitutes
+   * `buildDefaultTree`). Downgrading to a pre-panel-canvas build is safe but
+   * loses this section.
    */
-  layout: Record<string, string>
-  /** The main-window video grid layout. */
-  video: VideoLayoutState
+  panelLayout: PanelLayoutSession | null
   /** Every open pop-out window (empty when none). */
   popouts: PopoutState[]
+  /** The app theme selection (System/Cream/Ember); default 'system'. */
+  theme: ThemeMode
 }
 
 /**
@@ -212,10 +291,10 @@ export interface SessionPatch {
   }
   /** Replace the whole main-window bounds record (or clear it with null). */
   window?: WindowBoundsState | null
-  /** Merge these panel-layout entries into the stored map. */
-  layout?: Record<string, string>
-  /** Replace the whole main-window video layout. */
-  video?: VideoLayoutState
+  /** Replace the whole panel-layout section (whole-section replace, like `window`); `null` clears it. */
+  panelLayout?: PanelLayoutSession | null
+  /** Replace the app theme selection. Applied main-side via `theme:set`, not sent by the renderer through `session:patch` directly, but kept in the patch shape so the pure merge handles it uniformly. */
+  theme?: ThemeMode
 }
 
 // ---------------------------------------------------------------------------
@@ -232,9 +311,15 @@ export interface OpenPopoutRequest {
   bounds?: WindowBoundsState
 }
 
-/** A pop-out renderer's persist patch for its own slice. */
+/**
+ * A pop-out renderer's persist patch for its own slice — `tree`/`videoFit`
+ * are each a whole-section replace (like `SessionPatch.panelLayout`), pushed
+ * by `usePopoutLayout` on every structural/fit change; `feedIds` replaces
+ * the whole array (a leaf close/reopen); `volumes` merges per feed id.
+ */
 export interface PopoutPatch {
-  video?: VideoLayoutState
+  tree?: LayoutNode | null
+  videoFit?: Record<string, VideoFitMode>
   volumes?: Record<string, FeedAudioState>
   feedIds?: string[]
 }
@@ -274,6 +359,16 @@ export interface SessionApi {
   patch(patch: SessionPatch): void
 }
 
+export interface ThemeApi {
+  /**
+   * Set the app theme (System/Cream/Ember). Drives `nativeTheme.themeSource`
+   * in the main process — every window (including pop-outs) and the OS chrome
+   * follow instantly — and persists the choice for the next launch. The
+   * current value is read via `session.get()`; there is no separate getter.
+   */
+  set(theme: ThemeMode): Promise<void>
+}
+
 export interface WindowsApi {
   /** (main window) Pop a subset of feeds into their own grid-only window; resolves the new id. */
   openPopout(request: OpenPopoutRequest): Promise<number>
@@ -282,8 +377,17 @@ export interface WindowsApi {
   /** (pop-out window) Persist this pop-out's layout / per-feed volumes. */
   patchPopout(id: number, patch: PopoutPatch): void
   /**
-   * Subscribe to the set of currently open pop-outs (feed hand-off). Returns an
-   * unsubscribe function; call it on teardown so a re-mount never stacks listeners.
+   * (pop-out window) "Merge into…": move `sourceId`'s feeds + per-feed volumes
+   * into `targetId`'s pop-out, then close `sourceId`'s window. Resolves `true`
+   * on success; `false` if either id is unknown, they're equal, or a window
+   * disappeared in a race with a manual close — the caller shows an inline
+   * error rather than assuming the merge happened.
+   */
+  mergePopout(sourceId: number, targetId: number): Promise<boolean>
+  /**
+   * Subscribe to the set of currently open pop-outs (feed hand-off, and the
+   * "Merge into…" control's target list). Returns an unsubscribe function;
+   * call it on teardown so a re-mount never stacks listeners.
    */
   onPopoutsChanged(listener: (popouts: PopoutSummary[]) => void): () => void
   /** This window's renderer role, derived once from the launch URL query. */
@@ -296,10 +400,78 @@ export interface WindowsApi {
 export interface AppApi {
   fr24: Fr24Api
   session: SessionApi
+  theme: ThemeApi
   config: ConfigApi
   audio: AudioApi
+  liveatc: LiveAtcApi
   weather: WeatherApi
   windows: WindowsApi
+  layout: LayoutApi
+}
+
+// ---------------------------------------------------------------------------
+// Native-menu <-> panel-layout bridge payloads (PR4 of the panel-system
+// effort — see docs/Panel-System-Plan.md § File inventory / § PR slicing
+// item 4). The native application Menu (src/main/menu.ts) is the FR24-safe
+// surface for anything that must sit above the FR24 WebContentsView, which
+// paints above all DOM (CLAUDE.md gotcha); it renders a "Panels" checkbox per
+// panel id and a "Layout" menu ("Reset to Default Layout", plus PR5's "Layout
+// Manager…" launcher and one radio item per saved profile). The renderer owns
+// the full panel universe (audio/weather/fr24 are fixed; the video feed set
+// comes from youtube/defaultFeeds.ts, which this shared module cannot import
+// — see @renderer/layout/panelMeta.ts's own doc comment), so it pushes the
+// current set + open/maximized state to main on every change; main renders the
+// checkboxes and forwards clicks back as commands rather than owning any panel
+// state itself.
+// ---------------------------------------------------------------------------
+
+/** One panel's menu-checkbox state, as sent by the renderer's menuBridge. */
+export interface LayoutMenuPanelEntry {
+  id: PanelId
+  /** The human title shown as the checkbox label (see @renderer/layout/panelMeta.ts's panelTitle). */
+  title: string
+  /** True when this panel is currently a leaf in the canvas tree (checkbox checked). */
+  open: boolean
+}
+
+/** The renderer -> main `layout:menuSync` payload. */
+export interface LayoutMenuSyncPayload {
+  /** Every panel the operator could toggle, in menu display order. */
+  panels: LayoutMenuPanelEntry[]
+  /** The currently maximized panel, or null — shown as a label suffix, not a separate control. */
+  maximizedPanelId: PanelId | null
+  /**
+   * Saved-profile names, in `layoutProfiles` order (PR5 of the panel-system
+   * effort — see @shared/layoutProfiles.ts). This order IS the menu order and
+   * what `CmdOrCtrl+Alt+1..9` count against: `layout:command`'s `apply-profile`
+   * carries the entry's INDEX in this array, not its name (names can be
+   * renamed; the index is what `applyProfileByIndex` takes).
+   */
+  profiles: string[]
+  /** The name of the profile currently matching the canvas (for the radio-item checkmark), or null. */
+  activeProfileName: string | null
+}
+
+/**
+ * A native-menu click, forwarded main -> renderer over `layout:command`.
+ * `reset-layout` and `toggle-panel` are the PR4 surface; `open-layout-manager`
+ * and `apply-profile` (PR5) open LayoutManagerModal and apply a saved profile
+ * by its `layout:menuSync` `profiles` index, respectively.
+ */
+export type LayoutCommand =
+  | { type: 'toggle-panel'; id: PanelId }
+  | { type: 'reset-layout' }
+  | { type: 'open-layout-manager' }
+  | { type: 'apply-profile'; index: number }
+
+export interface LayoutApi {
+  /** Push the current panel set + open/maximized state so the native menu can rebuild its checkboxes. */
+  syncMenu(payload: LayoutMenuSyncPayload): void
+  /**
+   * Subscribe to native-menu commands. Returns an unsubscribe function; call
+   * it on teardown so a re-mount (React StrictMode, HMR) never stacks listeners.
+   */
+  onCommand(listener: (command: LayoutCommand) => void): () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -328,6 +500,49 @@ export interface ConfigApi {
   get(): Promise<ConfigResult>
   /** Re-read config.json from disk (the "Reload config" button). */
   reload(): Promise<ConfigResult>
+  /**
+   * Replace the streams block of config.json (the channel manager's add /
+   * remove / reorder). The rest of the file — vad, ducking, weather, notes —
+   * is preserved, and the file stays hand-editable (decision 2026-07-19).
+   */
+  updateStreams(streams: StreamConfig[]): Promise<UpdateStreamsResult>
+}
+
+/**
+ * The outcome of `config:updateStreams`. On success the returned ConfigResult
+ * is the new active config (already cached main-side); on failure nothing was
+ * written and the previous config is still in force.
+ */
+export type UpdateStreamsResult = { ok: true; result: ConfigResult } | { ok: false; error: string }
+
+// ---------------------------------------------------------------------------
+// LiveATC directory payloads (channel manager). The search page is fetched in
+// the main process (browser UA — see CLAUDE.md) and parsed by the pure shared
+// parser; a fetch/parse failure is a typed result, never a throw across IPC.
+// ---------------------------------------------------------------------------
+
+/** The outcome of `liveatc:search`. */
+export type LiveAtcSearchResult =
+  | {
+      ok: true
+      icao: string
+      feeds: LiveAtcFeed[]
+      fetchedAt: number
+      /**
+       * 'live' when the feeds came from LiveATC just now (or its short cache);
+       * 'bundled' when the live search failed and these are the compiled-in
+       * KOSH snapshot (see shared/koshFallback.ts) — the dialog says so.
+       */
+      source: 'live' | 'bundled'
+    }
+  | { ok: false; icao: string; kind: ResolveFailureKind; error: string }
+
+export interface LiveAtcApi {
+  /**
+   * Fetch + parse the LiveATC feed directory for one airport query (e.g.
+   * "osh"). Cached main-side; pass `{ fresh: true }` to force a re-fetch.
+   */
+  search(icao: string, opts?: { fresh?: boolean }): Promise<LiveAtcSearchResult>
 }
 
 // ---------------------------------------------------------------------------

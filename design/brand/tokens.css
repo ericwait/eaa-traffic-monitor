@@ -42,6 +42,16 @@
   --color-warn:    #C08A2B;
   --color-danger:  #C0392B;
   --color-info:    #3E6C8A;
+  /* the audio "reconnecting" state — distinct from --color-warn so a slow
+     retry never reads as the same alarm as a config-fallback banner */
+  --color-reconnect: #B26A00;
+
+  /* flight-category hues (METAR/TAF) — carry aviation meaning, so they ride
+     their own tokens rather than the UI accent/status colors */
+  --color-cat-vfr:  #3E7C4F;
+  --color-cat-mvfr: #3E6C8A;
+  --color-cat-ifr:  #C0392B;
+  --color-cat-lifr: #8E44AD;
 
   /* ---- Typography --------------------------------------------------------- */
   --font-display: "Barlow Semi Condensed", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -124,6 +134,13 @@
     --color-warn:    #E0B24E;
     --color-danger:  #E4572E;
     --color-info:    #7FB0CE;
+    --color-reconnect: #FF9E4A;
+
+    /* dark IFR is a true red, kept distinct from the Ember accent orange */
+    --color-cat-vfr:  #6FB07C;
+    --color-cat-mvfr: #7FB0CE;
+    --color-cat-ifr:  #E06055;
+    --color-cat-lifr: #CE7FD0;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -148,6 +165,11 @@
   --color-warn:    #E0B24E;
   --color-danger:  #E4572E;
   --color-info:    #7FB0CE;
+  --color-reconnect: #FF9E4A;
+  --color-cat-vfr:  #6FB07C;
+  --color-cat-mvfr: #7FB0CE;
+  --color-cat-ifr:  #E06055;
+  --color-cat-lifr: #CE7FD0;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);

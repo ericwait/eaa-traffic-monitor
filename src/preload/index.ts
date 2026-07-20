@@ -6,16 +6,22 @@ import type {
   Fr24Bounds,
   Fr24NavAction,
   Fr24NavState,
+  LayoutCommand,
+  LayoutMenuSyncPayload,
+  LiveAtcSearchResult,
   OpenPopoutRequest,
   PopoutPatch,
   PopoutSummary,
   ResolveStreamResult,
   SessionPatch,
   SessionState,
+  ThemeMode,
+  UpdateStreamsResult,
   WeatherResult,
   WindowRole
 } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
+import type { StreamConfig } from '@shared/defaultConfig'
 
 /**
  * Derive this window's renderer role from its launch URL query. The main window
@@ -67,15 +73,24 @@ const api: AppApi = {
       ipcRenderer.send(IpcChannels.sessionPatch, patch)
     }
   },
+  theme: {
+    set: (theme: ThemeMode): Promise<void> => ipcRenderer.invoke(IpcChannels.themeSet, theme)
+  },
   config: {
     get: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configGet),
-    reload: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configReload)
+    reload: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configReload),
+    updateStreams: (streams: StreamConfig[]): Promise<UpdateStreamsResult> =>
+      ipcRenderer.invoke(IpcChannels.configUpdateStreams, streams)
   },
   audio: {
     resolveStream: (streamId: string, opts?: { fresh?: boolean }): Promise<ResolveStreamResult> =>
       ipcRenderer.invoke(IpcChannels.audioResolveStream, streamId, opts),
     // Static flag read once from the launch env — see AudioApi.isE2E.
     isE2E: process.env.AUDIO_E2E === '1'
+  },
+  liveatc: {
+    search: (icao: string, opts?: { fresh?: boolean }): Promise<LiveAtcSearchResult> =>
+      ipcRenderer.invoke(IpcChannels.liveatcSearch, icao, opts)
   },
   weather: {
     get: (): Promise<WeatherResult> => ipcRenderer.invoke(IpcChannels.weatherGet),
@@ -98,6 +113,8 @@ const api: AppApi = {
     patchPopout: (id: number, patch: PopoutPatch): void => {
       ipcRenderer.send(IpcChannels.windowsPatchPopout, id, patch)
     },
+    mergePopout: (sourceId: number, targetId: number): Promise<boolean> =>
+      ipcRenderer.invoke(IpcChannels.windowsMergePopout, sourceId, targetId),
     onPopoutsChanged: (listener: (popouts: PopoutSummary[]) => void): (() => void) => {
       // Wrap the caller's listener so Electron's event object never leaks into the
       // renderer, and return an unsubscribe that removes THIS wrapper.
@@ -107,6 +124,19 @@ const api: AppApi = {
     },
     role: windowRole,
     popoutId
+  },
+  layout: {
+    syncMenu: (payload: LayoutMenuSyncPayload): void => {
+      ipcRenderer.send(IpcChannels.layoutMenuSync, payload)
+    },
+    onCommand: (listener: (command: LayoutCommand) => void): (() => void) => {
+      // Same wrap-and-unsubscribe shape as fr24.onNavState/weather.onUpdate —
+      // never leaks Electron's event object, and a StrictMode/HMR re-mount
+      // can't stack duplicate listeners.
+      const handler = (_event: unknown, command: LayoutCommand): void => listener(command)
+      ipcRenderer.on(IpcChannels.layoutCommand, handler)
+      return () => ipcRenderer.removeListener(IpcChannels.layoutCommand, handler)
+    }
   }
 }
 

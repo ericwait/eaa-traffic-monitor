@@ -1,0 +1,129 @@
+{#- Home page — the Airshow Traffic Monitor advertisement. The marketing sections are injected in
+the `tabs` block so they render full-bleed, directly under the header and above the normal article
+area. The README.md body (the documentation index) still renders in `content` below, so README.md
+stays the resolvable, plan-frozen docs index — the ad sits on top of it (decision 2026-07-20).
+Styles live in docs/assets/brand/wyvern.css (loaded via extra_css). -#} {% extends "main.html" %}
+{%- set repo = config.repo_url -%} {%- set latest = config.repo_url ~ "/releases/latest" -%} {%
+block tabs %}
+<!-- Hero: the command-center ground, dark in both themes -->
+<section class="wy-section wy-hero">
+  <div class="wy-hero__wrap">
+    <div class="wy-hero__lead">
+      <img
+        class="wy-hero__mark"
+        src="{{ 'assets/brand/icon-ember.svg' | url }}"
+        alt="Wyvern Watch mark"
+        width="76"
+        height="76"
+      />
+      <p class="wy-eyebrow">
+        <span class="wy-live" aria-hidden="true"></span>
+        EAA AirVenture Oshkosh · KOSH
+      </p>
+      <h1>One window on the <em>whole airshow</em>.</h1>
+      <p class="wy-lede">
+        Airshow Traffic Monitor brings live ATC audio, a wall of airfield video, and flight tracking
+        together in one desktop command center — built first for AirVenture Oshkosh.
+      </p>
+      <div class="wy-cta">
+        <a class="wy-btn wy-btn--primary" href="{{ latest }}">Download</a>
+        <a class="wy-btn wy-btn--ghost" href="{{ repo }}">View on GitHub</a>
+      </div>
+      <p class="wy-meta">Free &amp; open source · macOS · Windows · Linux</p>
+    </div>
+    <div class="wy-shot">
+      <img
+        src="{{ 'assets/brand/app-landscape.jpg' | url }}"
+        alt="The Airshow Traffic Monitor dashboard: a FlightRadar24 map beside a grid of live airfield webcams and a column of ATC audio channels"
+        width="1760"
+        height="745"
+        loading="lazy"
+      />
+    </div>
+  </div>
+</section>
+
+<!-- Three pillars -->
+<section class="wy-section wy-pillars">
+  <div class="wy-wrap">
+    <p class="wy-section-label">What it does</p>
+    <h2 class="wy-section-title">Three feeds, one window.</h2>
+    <div class="wy-grid">
+      <div class="wy-pillar">
+        <div class="wy-pillar__rule" aria-hidden="true"></div>
+        <h3>ATC Audio</h3>
+        <p>
+          Every tower, approach, and ground frequency at once — with priority ducking, one-click
+          solo, activity lights, and stereo placement so you can tell who's talking without looking.
+        </p>
+        <span class="wy-pillar__tag">GUARD · FISK · TOWER · DEPARTURE</span>
+      </div>
+      <div class="wy-pillar">
+        <div class="wy-pillar__rule" aria-hidden="true"></div>
+        <h3>Live Video</h3>
+        <p>
+          A grid of EAA live webcams and YouTube feeds. Pop any tile out to its own window, fit or
+          fill the frame, and maximize the panel that matters most right now.
+        </p>
+        <span class="wy-pillar__tag">EAA LIVE · YOUTUBE</span>
+      </div>
+      <div class="wy-pillar">
+        <div class="wy-pillar__rule" aria-hidden="true"></div>
+        <h3>Flight Tracking</h3>
+        <p>
+          A full FlightRadar24 view embedded right in the dashboard — the airfield, the patterns,
+          and every contact overhead, live and interactive.
+        </p>
+        <span class="wy-pillar__tag">FLIGHTRADAR24 · KOSH</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Second-monitor / vertical showcase -->
+<section class="wy-section wy-showcase">
+  <div class="wy-wrap wy-showcase__grid">
+    <div class="wy-showcase__body">
+      <p class="wy-section-label">Multi-monitor</p>
+      <h2 class="wy-section-title">Spread it across the ramp.</h2>
+      <p>
+        Pop any camera into its own window and stack a wall of feeds on a vertical monitor, while
+        the main dashboard keeps the map and the audio front and center. Close a pop-out and its
+        feed docks right back where it belongs — your layout is restored every launch.
+      </p>
+    </div>
+    <div class="wy-showcase__shot">
+      <img
+        src="{{ 'assets/brand/app-vertical.jpg' | url }}"
+        alt="A vertical monitor stacking three live airfield webcam feeds — warbirds, vintage aircraft, and the flight line"
+        width="698"
+        height="1200"
+        loading="lazy"
+      />
+    </div>
+  </div>
+</section>
+
+<!-- Download band -->
+<section class="wy-section wy-download">
+  <div class="wy-wrap">
+    <h2 class="wy-section-title">Ready when you are.</h2>
+    <p>
+      Free and open source. Grab the latest release for macOS, Windows, or Linux — no account, no
+      sign-up.
+    </p>
+    <div class="wy-cta">
+      <a class="wy-btn wy-btn--primary" href="{{ latest }}">Download the latest release</a>
+      <a class="wy-btn wy-btn--ghost" href="{{ repo }}">Browse the source</a>
+    </div>
+    <p class="wy-meta">macOS (Apple Silicon) · Windows · Linux (AppImage)</p>
+  </div>
+</section>
+
+<!-- Quiet lead-in to the documentation index below -->
+<section class="wy-section wy-docs-divider">
+  <div class="wy-wrap">
+    <p class="wy-section-label">Project documentation</p>
+  </div>
+</section>
+{% endblock %} {% block content %} {{ super() }} {% endblock %}

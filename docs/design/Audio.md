@@ -111,6 +111,17 @@ A ranked set of Oshkosh frequencies ships baked in, sourced from LiveATC, so the
 ATIS (rank 7) is a continuous recorded loop, not live chatter, so its activity light would be on nearly all the time and it never truly "goes quiet."
 It therefore ships low-volume or muted-with-light: its light shows it looping, but at the bottom of the ranking it never ducks anything and never competes for attention.
 
+**Managing channels from the panel.**
+The curated defaults are a starting point, not a ceiling — the operator builds their own channel set in the panel, no file editing required (decision 2026-07-19).
+An **add-channel** action opens a dialog listing an airport's feeds from the LiveATC directory; the airport is a plain station code, so the same flow works beyond Oshkosh.
+Feeds already on the panel are shown but disabled, so "what can I add?" and "what do I already have?" read from one list; a newly added channel joins at the bottom of the ranking, disconnected, so adding one never disturbs the running mix.
+Because that directory sits behind an anti-bot gateway that can refuse automated access at any moment, a bundled snapshot of the Oshkosh feeds is the fallback when the live lookup fails — the operator can always add a KOSH channel even with the directory unreachable, though the snapshot cannot report which feeds are broadcasting right now (decision 2026-07-19).
+
+**Priority is the list order.**
+The channel list reads top-to-bottom as highest-to-lowest priority, and the operator sets priority by dragging a channel up or down (rank 1 is the top); the same reorder is available from the keyboard for accessibility.
+Priority stays owned by the config file rather than the per-session state, so it is re-derived on every launch and a hand-edit and a drag are the same edit to the same place (decision 2026-07-19) — see [../development/TechStack.md](../development/TechStack.md).
+A channel can also be removed from the panel; it stays in the directory and can be re-added at any time, and the last channel cannot be removed (the panel is never empty).
+
 ### Video feed audio — bounded
 
 The YouTube video feeds carry audio, but the app plays them inside embedded players it does not own the internals of, so the audio contract is deliberately small: **per-feed volume and mute, and nothing else.**

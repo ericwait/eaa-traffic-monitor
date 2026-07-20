@@ -1,20 +1,27 @@
-import { ipcMain } from 'electron'
+import { ipcMain, nativeTheme } from 'electron'
 import type {
   Fr24Bounds,
   Fr24NavAction,
+  LayoutMenuSyncPayload,
+  LiveAtcSearchResult,
   OpenPopoutRequest,
   PopoutPatch,
   ResolveStreamResult,
   SessionPatch,
+  ThemeMode,
+  UpdateStreamsResult,
   VideoLayoutState,
   WeatherResult,
   WindowBoundsState
 } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
+import { sanitizeLayoutTree, sanitizeVideoFitRecord } from '@shared/panelLayout'
 import type { Fr24Controller } from './fr24'
+import type { LayoutMenuController } from './menu'
 import type { PopoutManager } from './popouts'
 import { getSessionState, patchSessionState } from './session'
-import { getConfig, reloadConfig } from './config'
+import { getConfig, reloadConfig, updateStreams } from './config'
+import { searchLiveAtc } from './liveatcDirectory'
 import { clearResolveCache, resolveStream } from './plsResolver'
 import { clearWeatherCache, getWeather, refreshWeather } from './weather'
 import type { WeatherPoller } from './weatherPoller'
@@ -28,6 +35,12 @@ import type { WeatherPoller } from './weatherPoller'
 // Both narrow untrusted renderer payloads before acting on them.
 
 const NAV_ACTIONS: readonly Fr24NavAction[] = ['back', 'forward', 'reload', 'home']
+const THEME_MODES: readonly ThemeMode[] = ['system', 'light', 'dark']
+
+/** Narrow an untrusted renderer payload to a valid ThemeMode. */
+function isThemeMode(value: unknown): value is ThemeMode {
+  return typeof value === 'string' && THEME_MODES.includes(value as ThemeMode)
+}
 
 /** Narrow an untrusted renderer payload to Fr24Bounds (all four integer-ish). */
 function isBounds(value: unknown): value is Fr24Bounds {
@@ -81,14 +94,63 @@ function narrowOpenPopoutRequest(value: unknown): OpenPopoutRequest | null {
   return request
 }
 
-/** Narrow a pop-out renderer's persist patch to the fields it is allowed to set. */
+/** Narrow an untrusted `layout:menuSync` payload; null when the shape is wrong. */
+function narrowLayoutMenuSync(value: unknown): LayoutMenuSyncPayload | null {
+  if (typeof value !== 'object' || value === null) return null
+  const v = value as Record<string, unknown>
+  if (!Array.isArray(v.panels)) return null
+  const panels: LayoutMenuSyncPayload['panels'] = []
+  for (const entry of v.panels) {
+    if (typeof entry !== 'object' || entry === null) return null
+    const e = entry as Record<string, unknown>
+    if (typeof e.id !== 'string' || e.id.length === 0) return null
+    if (typeof e.title !== 'string') return null
+    if (typeof e.open !== 'boolean') return null
+    panels.push({
+      id: e.id as LayoutMenuSyncPayload['panels'][number]['id'],
+      title: e.title,
+      open: e.open
+    })
+  }
+  const maximizedPanelId =
+    v.maximizedPanelId === null || typeof v.maximizedPanelId === 'string'
+      ? (v.maximizedPanelId as LayoutMenuSyncPayload['maximizedPanelId'])
+      : null
+  // PR5 (feature/layout-snaps): saved-profile names + which one is active,
+  // for the Layout menu's profile radio items (src/main/menu.ts). Malformed
+  // entries are dropped individually (non-string names are filtered out)
+  // rather than rejecting the whole sync — the panel checkboxes still matter
+  // even if the profile list is momentarily odd.
+  const profiles = Array.isArray(v.profiles)
+    ? v.profiles.filter((p): p is string => typeof p === 'string')
+    : []
+  const activeProfileName =
+    v.activeProfileName === null || typeof v.activeProfileName === 'string'
+      ? (v.activeProfileName as string | null)
+      : null
+  return { panels, maximizedPanelId, profiles, activeProfileName }
+}
+
+/**
+ * Narrow a pop-out renderer's persist patch to the fields it is allowed to
+ * set. `tree` reuses the never-throw `sanitizeLayoutTree`/`videoFit` reuses
+ * `sanitizeVideoFitRecord` (both `@shared/panelLayout`) rather than rejecting
+ * the whole patch on a malformed shape — self-healing to a null/empty value
+ * is safer than dropping a legitimate patch that also carries `feedIds`.
+ * `null` for `tree` itself (this pop-out's feeds dropped to zero) is a valid,
+ * intentional value, distinct from "absent" — narrowed by an explicit
+ * `=== null` check before falling through to the sanitizer.
+ */
 function narrowPopoutPatch(value: unknown): PopoutPatch | null {
   if (typeof value !== 'object' || value === null) return null
   const v = value as Record<string, unknown>
   const patch: PopoutPatch = {}
-  if (v.video !== undefined) {
-    if (!isVideoLayout(v.video)) return null
-    patch.video = v.video
+  if (v.tree !== undefined) {
+    patch.tree = v.tree === null ? null : sanitizeLayoutTree(v.tree)
+  }
+  if (v.videoFit !== undefined) {
+    if (typeof v.videoFit !== 'object' || v.videoFit === null) return null
+    patch.videoFit = sanitizeVideoFitRecord(v.videoFit)
   }
   if (v.volumes !== undefined) {
     if (typeof v.volumes !== 'object' || v.volumes === null) return null
@@ -119,6 +181,21 @@ export function registerGlobalIpc(
     patchSessionState(patch as SessionPatch)
   })
 
+  // --- Theme (Wyvern Watch reskin) ----------------------------------------
+  // Drives nativeTheme.themeSource directly — every renderer's prefers-color-
+  // scheme (main window, every pop-out) and the OS window chrome follow this
+  // one setting at once, so there is no per-window sync code. Persisted the
+  // same way any other session field is (decision 2026-07-19; see
+  // docs/decisions/README.md and docs/WYVERN-RESKIN-PLAN.md Step 3).
+  ipcMain.handle(IpcChannels.themeSet, (_e, theme: unknown) => {
+    if (!isThemeMode(theme)) {
+      console.warn('[ipc] theme:set ignored — invalid theme mode:', theme)
+      return
+    }
+    nativeTheme.themeSource = theme
+    patchSessionState({ theme })
+  })
+
   // --- Config (Phase 2a) --------------------------------------------------
   // Reading and validation never throw (config.ts degrades to defaults), so the
   // handlers just forward the result. Reload also drops the resolve cache so the
@@ -134,6 +211,61 @@ export function registerGlobalIpc(
     getWeatherPoller()?.start()
     return result
   })
+
+  // --- Channel manager ------------------------------------------------------
+  // updateStreams validates main-side (zod + unique ids/priorities) and writes
+  // config.json atomically; a failure is a typed result and nothing changes.
+  // On success: removed streams lose their resolve-cache entries and their
+  // persisted session overrides (device routing, volume/mute/pan), so a future
+  // stream reusing the id starts clean.
+  ipcMain.handle(IpcChannels.configUpdateStreams, (_e, streams: unknown): UpdateStreamsResult => {
+    const beforeIds = getConfig().config.streams.map((s) => s.id)
+    const outcome = updateStreams(streams)
+    if (!outcome.ok) return outcome
+
+    const nextIds = new Set(outcome.result.config.streams.map((s) => s.id))
+    const removed = beforeIds.filter((id) => !nextIds.has(id))
+    // A reorder can also change nothing but priorities; plsUrls may have changed
+    // for kept ids too (hand edits merged through the UI path are impossible
+    // today, but clearing the whole cache is cheap and always correct).
+    clearResolveCache()
+    if (removed.length > 0) {
+      const nulls = <T>(): Record<string, T | null> =>
+        Object.fromEntries(removed.map((id) => [id, null]))
+      patchSessionState({ audio: { devices: nulls(), streams: nulls() } })
+    }
+    return outcome
+  })
+
+  ipcMain.handle(
+    IpcChannels.liveatcSearch,
+    async (_e, icao: unknown, opts: unknown): Promise<LiveAtcSearchResult> => {
+      if (typeof icao !== 'string' || icao.length === 0) {
+        return {
+          ok: false,
+          icao: String(icao),
+          kind: 'unknown',
+          error: 'liveatc:search called without a station code'
+        }
+      }
+      const fresh =
+        typeof opts === 'object' && opts !== null && (opts as { fresh?: unknown }).fresh === true
+      try {
+        return await searchLiveAtc(icao, { fresh })
+      } catch (err: unknown) {
+        // Defensive: searchLiveAtc is written not to throw, but IPC must never
+        // reject — a rejection would reach the renderer as an opaque error.
+        return {
+          ok: false,
+          icao,
+          kind: 'unknown',
+          error: `unexpected error searching LiveATC: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        }
+      }
+    }
+  )
 
   // --- Audio (Phase 2a) ---------------------------------------------------
   // resolveStream returns a typed success/failure — never throws across IPC —
@@ -232,17 +364,32 @@ export function registerGlobalIpc(
     popouts.patchPopout(id, narrowed)
   })
 
+  ipcMain.handle(
+    IpcChannels.windowsMergePopout,
+    (_e, sourceId: unknown, targetId: unknown): boolean => {
+      if (typeof sourceId !== 'number' || typeof targetId !== 'number') {
+        console.warn('[ipc] windows:mergePopout ignored — non-numeric ids:', sourceId, targetId)
+        return false
+      }
+      return popouts.mergePopout(sourceId, targetId)
+    }
+  )
+
   return () => {
     ipcMain.removeHandler(IpcChannels.sessionGet)
     ipcMain.removeAllListeners(IpcChannels.sessionPatch)
+    ipcMain.removeHandler(IpcChannels.themeSet)
     ipcMain.removeHandler(IpcChannels.configGet)
     ipcMain.removeHandler(IpcChannels.configReload)
+    ipcMain.removeHandler(IpcChannels.configUpdateStreams)
+    ipcMain.removeHandler(IpcChannels.liveatcSearch)
     ipcMain.removeHandler(IpcChannels.audioResolveStream)
     ipcMain.removeHandler(IpcChannels.weatherGet)
     ipcMain.removeHandler(IpcChannels.weatherRefresh)
     ipcMain.removeHandler(IpcChannels.windowsOpenPopout)
     ipcMain.removeAllListeners(IpcChannels.windowsClosePopout)
     ipcMain.removeAllListeners(IpcChannels.windowsPatchPopout)
+    ipcMain.removeHandler(IpcChannels.windowsMergePopout)
   }
 }
 
@@ -279,5 +426,27 @@ export function registerFr24Ipc(fr24: Fr24Controller): () => void {
     ipcMain.removeAllListeners(IpcChannels.fr24SetBounds)
     ipcMain.removeAllListeners(IpcChannels.fr24Nav)
     ipcMain.removeAllListeners(IpcChannels.fr24SetVisible)
+  }
+}
+
+/**
+ * Register the `layout:menuSync` listener for one main window's menu
+ * controller (src/main/menu.ts). Per-main-window, like registerFr24Ipc — the
+ * native application menu (and the panel canvas it reflects) belongs to the
+ * main window, not any pop-out. Returns a disposer that removes the listener
+ * so a window re-create never stacks duplicate registrations.
+ */
+export function registerLayoutMenuIpc(controller: LayoutMenuController): () => void {
+  ipcMain.on(IpcChannels.layoutMenuSync, (_e, payload: unknown) => {
+    const narrowed = narrowLayoutMenuSync(payload)
+    if (!narrowed) {
+      console.warn('[ipc] layout:menuSync ignored — malformed payload:', payload)
+      return
+    }
+    controller.handleMenuSync(narrowed)
+  })
+
+  return () => {
+    ipcMain.removeAllListeners(IpcChannels.layoutMenuSync)
   }
 }

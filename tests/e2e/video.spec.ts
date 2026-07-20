@@ -1,34 +1,46 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { defaultFeeds } from '../../src/renderer/src/youtube/defaultFeeds'
 import { mainEntry, getMainWindow, e2eEnv } from './support'
 
-// Live-video-grid smoke. Proves the grid tiles every configured feed and that
-// double-click emphasis actually changes the store/DOM — WITHOUT depending on
-// any YouTube network content. CI is a network-restricted box: the IFrame API
+// Live-video smoke, rewritten for per-feed panels (docs/Panel-System-Plan.md):
+// the main window no longer has a single grid with uniform/emphasized/fill
+// modes — each feed is its own panel on the canvas (layout/LeafFrame.tsx).
+// Proves the per-tile identity chrome renders and that each feed is a
+// first-class, independently addressable panel — WITHOUT depending on any
+// YouTube network content. CI is a network-restricted box: the IFrame API
 // script cannot load there, so every tile stays in its own loading/offline
 // placeholder state. That is fine and expected — this suite makes NO
 // assertions about YT.Player internals, actual playback, or the LIVE/OFFLINE
-// badge's specific value, only that the identity chrome and layout-mode
-// plumbing are present and respond to interaction.
+// badge's specific value, only that the identity chrome and per-panel
+// plumbing are present.
+//
+// Isolated userData (same convention as channels.spec.ts/popout.spec.ts/
+// layoutProfiles.spec.ts, PR6 "feature/panel-drag-dock" e2e-isolation fix):
+// without its own E2E_USERDATA this suite shares the developer's real
+// session.json with every other spec run against the default profile.
 //
 // Prerequisite: `electron-vite build` must have run so out/main/index.js and
 // out/renderer exist. `just e2e` builds first.
 
 let app: ElectronApplication
 let page: Page
+let userDataDir: string
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: [mainEntry], env: e2eEnv() })
+  userDataDir = mkdtempSync(join(tmpdir(), 'atm-e2e-video-'))
+  app = await electron.launch({
+    args: [mainEntry],
+    env: e2eEnv({ E2E_USERDATA: userDataDir })
+  })
 
   // Keep YouTube off the network so every tile stays in its offline placeholder
-  // state — the deterministic target this suite's double-click gestures rely on.
-  // On CI (network-restricted) this holds anyway; the block makes it hold on a
-  // developer machine too, now that the packaged renderer loads from a real http
-  // origin (Phase 2b) and the IFrame API would otherwise succeed and hand the
-  // tiles LIVE iframes that swallow a synthetic double-click (see the note on the
-  // demote test below). Installed before the first window paints, so the renderer
-  // never reaches YouTube.
+  // state, deterministically, on a developer machine too (see audio.spec.ts's
+  // sibling comment in the pre-rewrite version of this file for the full
+  // rationale — unchanged by the panel-canvas work).
   await app.evaluate(({ session }) => {
     session.defaultSession.webRequest.onBeforeRequest(
       { urls: ['*://*.youtube.com/*', '*://*.ytimg.com/*', '*://*.googlevideo.com/*'] },
@@ -43,6 +55,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close()
+  if (userDataDir) rmSync(userDataDir, { recursive: true, force: true })
 })
 
 test('renders one video tile per configured default feed', async () => {
@@ -58,41 +71,27 @@ test('every tile shows its feed label and a LIVE/OFFLINE badge', async () => {
   }
 })
 
-test('the grid starts in uniform layout mode', async () => {
-  await expect(page.getByTestId('video-grid')).toHaveAttribute('data-layout-mode', 'uniform')
+test('every feed is its own panel, addressable by its video: panel id', async () => {
+  for (const feed of defaultFeeds) {
+    const leaf = page.locator(`.leaf-frame[data-panel-id="video:${feed.id}"]`)
+    await expect(leaf).toHaveCount(1)
+    await expect(leaf.getByTestId('video-tile')).toHaveAttribute('data-feed-id', feed.id)
+  }
 })
 
-test('double-clicking a tile flips the grid into emphasized layout mode', async () => {
-  const firstTile = page.getByTestId('video-tile').first()
-  await firstTile.dblclick()
-  await expect(page.getByTestId('video-grid')).toHaveAttribute('data-layout-mode', 'emphasized')
-  await expect(firstTile).toHaveClass(/video-tile--emphasized/)
+test('the fit toggle defaults every tile to fit mode', async () => {
+  for (const feed of defaultFeeds) {
+    const tile = page.locator(`[data-testid="video-tile"][data-feed-id="${feed.id}"]`)
+    await expect(tile).toHaveAttribute('data-fit-mode', 'fit')
+  }
 })
 
-test('double-clicking the same (now-emphasized) tile fills the whole panel with it', async () => {
-  // Per the phase brief: double-click on an already-emphasized tile is the
-  // secondary path to "fill panel" (the primary path is the explicit
-  // fill-panel button in the hover cluster).
-  const firstTile = page.getByTestId('video-tile').first()
-  await firstTile.dblclick()
-  await expect(page.getByTestId('video-grid')).toHaveAttribute('data-layout-mode', 'fill')
-  await expect(page.getByTestId('video-tile')).toHaveCount(1) // only the filled feed renders
-  await expect(page.getByTestId('video-tile')).toHaveClass(/video-tile--filled/)
-})
-
-test('Escape exits fill-panel mode back to the grid (still emphasized, not reset to uniform)', async () => {
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('video-grid')).toHaveAttribute('data-layout-mode', 'emphasized')
-  await expect(page.getByTestId('video-tile')).toHaveCount(defaultFeeds.length)
-})
-
-test('the explicit demote button returns an emphasized tile to uniform mode', async () => {
-  // The reliable, gesture-independent path back to uniform — double-click
-  // alone cannot demote (it fills the panel instead once already emphasized;
-  // see above), and a real live iframe can swallow a double-click entirely,
-  // so this button is the guaranteed control (see VideoTile.tsx).
-  const emphasizedTile = page.locator('.video-tile--emphasized')
-  await emphasizedTile.hover()
-  await emphasizedTile.getByRole('button', { name: /^Demote/ }).click()
-  await expect(page.getByTestId('video-grid')).toHaveAttribute('data-layout-mode', 'uniform')
+test('there are no emphasize/fill controls anywhere — retired in favor of per-panel maximize + fit/fill everywhere', async () => {
+  // Retired for the main window in decision 2026-07-19, and for pop-outs too
+  // in decision 2026-07-20 (see docs/decisions/README.md and
+  // docs/design/Layout.md's pop-out section) — VideoTile has no emphasize/
+  // fill concept left at all now; see panels.spec.ts (main window maximize)
+  // and popout.spec.ts (pop-out maximize).
+  await expect(page.locator('.video-tile-emphasize-btn')).toHaveCount(0)
+  await expect(page.locator('.video-tile-fill-btn')).toHaveCount(0)
 })

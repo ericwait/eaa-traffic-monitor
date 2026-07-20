@@ -6,10 +6,17 @@ import {
   upsertPopout,
   removePopout,
   patchPopout,
+  mergePopouts,
   nextPopoutId,
   poppedOutFeedIds,
   popoutSummaries
 } from '@shared/session'
+import {
+  buildBalancedGrid,
+  collectLeafIds,
+  insertVideoLeafBottom,
+  type PanelId
+} from '@shared/panelLayout'
 import type { PopoutState, SessionState, WindowBoundsState } from '@shared/ipc'
 
 // The full session restore contract lives here — the merge and pop-out
@@ -27,12 +34,24 @@ function bounds(
   return { x, y, width, height, displayId }
 }
 
+/** `video:${feedId}` as a typed PanelId — avoids a cast at every call site below. */
+function videoLeaf(feedId: string): PanelId {
+  return `video:${feedId}`
+}
+
+/**
+ * A well-formed pop-out slice — decision 2026-07-20: `tree` is a fresh
+ * balanced grid over `feedIds` (the panel canvas's own leaf shape, same as a
+ * from-scratch main-window video region), replacing the old `video:
+ * VideoLayoutState` field. Mirrors `main/popouts.ts`'s `openPopout`.
+ */
 function popout(id: number, feedIds: string[]): PopoutState {
   return {
     id,
     bounds: bounds(),
     feedIds,
-    video: { mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null },
+    tree: buildBalancedGrid(feedIds.map(videoLeaf)),
+    videoFit: {},
     volumes: {}
   }
 }
@@ -45,9 +64,9 @@ describe('defaultSessionState', () => {
       fr24: { lastUrl: null },
       audio: { devices: {}, streams: {} },
       window: null,
-      layout: {},
-      video: { mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null },
-      popouts: []
+      panelLayout: null,
+      popouts: [],
+      theme: 'system'
     })
     expect(a).not.toBe(b)
     expect(a.audio).not.toBe(b.audio)
@@ -75,9 +94,9 @@ describe('sanitizeSessionState', () => {
         }
       },
       window: { x: 10, y: 20, width: 1280, height: 800, displayId: 2 },
-      layout: { 'group:main': '{"atc":22}', bad: 5 },
-      video: { mode: 'emphasized', emphasizedFeedId: 'warbirds', fillPanelFeedId: null },
       popouts: [
+        // Legacy shape (no tree/videoFit, an old `video` field instead) — see
+        // the dedicated migration tests below for what this becomes.
         { id: 1, bounds: bounds(100, 100), feedIds: ['warbirds'], video: {}, volumes: {} },
         { id: 2 } // no bounds → dropped
       ]
@@ -87,23 +106,15 @@ describe('sanitizeSessionState', () => {
     expect(s.audio.devices).toEqual({ tower: { deviceId: 'abc', deviceLabel: 'Headphones' } })
     expect(s.audio.streams).toEqual({ tower: { volume: 0.5, muted: true, pan: -0.3 }, gnd: {} })
     expect(s.window).toEqual({ x: 10, y: 20, width: 1280, height: 800, displayId: 2 })
-    expect(s.layout).toEqual({ 'group:main': '{"atc":22}' })
-    expect(s.video).toEqual({
-      mode: 'emphasized',
-      emphasizedFeedId: 'warbirds',
-      fillPanelFeedId: null
-    })
     expect(s.popouts).toHaveLength(1)
     expect(s.popouts[0].id).toBe(1)
   })
 
-  it('clamps out-of-range volumes/pans and defaults a bad video mode', () => {
+  it('clamps out-of-range volumes/pans', () => {
     const s = sanitizeSessionState({
-      audio: { streams: { a: { volume: 5, pan: -9 } } },
-      video: { mode: 'wild', emphasizedFeedId: 42 }
+      audio: { streams: { a: { volume: 5, pan: -9 } } }
     })
     expect(s.audio.streams.a).toEqual({ volume: 1, pan: -1 })
-    expect(s.video).toEqual({ mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null })
   })
 
   it('keeps a boolean connected flag (on-demand set) and drops a non-boolean one', () => {
@@ -127,6 +138,120 @@ describe('sanitizeSessionState', () => {
   it('defaults a missing displayId to null but keeps valid bounds', () => {
     const s = sanitizeSessionState({ window: { x: 5, y: 6, width: 700, height: 500 } })
     expect(s.window).toEqual({ x: 5, y: 6, width: 700, height: 500, displayId: null })
+  })
+
+  it('panelLayout is null when absent (every pre-existing session.json)', () => {
+    expect(sanitizeSessionState({}).panelLayout).toBeNull()
+  })
+
+  it('sanitizes a well-formed panelLayout section, leaving the other sections untouched', () => {
+    const s = sanitizeSessionState({
+      fr24: { lastUrl: 'https://x' },
+      panelLayout: {
+        tree: { type: 'leaf', id: 'fr24' },
+        maximizedPanelId: 'fr24',
+        videoFit: { warbirds: 'fill' },
+        profiles: []
+      }
+    })
+    expect(s.panelLayout).toEqual({
+      tree: { type: 'leaf', id: 'fr24' },
+      maximizedPanelId: 'fr24',
+      videoFit: { warbirds: 'fill' },
+      profiles: []
+    })
+    expect(s.fr24.lastUrl).toBe('https://x')
+  })
+
+  it('ignores the removed legacy layout/video keys rather than choking on them (an old session.json still has them until its next flush)', () => {
+    const s = sanitizeSessionState({
+      fr24: { lastUrl: 'https://x' },
+      layout: { 'group:cols': '{"atc":22}' },
+      video: { mode: 'emphasized', emphasizedFeedId: 'warbirds', fillPanelFeedId: null }
+    })
+    expect(s.fr24.lastUrl).toBe('https://x')
+    expect(s.panelLayout).toBeNull()
+    expect(s).not.toHaveProperty('layout')
+    expect(s).not.toHaveProperty('video')
+  })
+
+  it('a corrupt panelLayout sanitizes to null without disturbing any other section', () => {
+    const s = sanitizeSessionState({
+      fr24: { lastUrl: 'https://x' },
+      panelLayout: { tree: { type: 'nonsense' } }
+    })
+    expect(s.panelLayout).toBeNull()
+    expect(s.fr24.lastUrl).toBe('https://x')
+  })
+
+  it('keeps a valid theme and defaults an absent/invalid one to system', () => {
+    expect(sanitizeSessionState({ theme: 'light' }).theme).toBe('light')
+    expect(sanitizeSessionState({ theme: 'dark' }).theme).toBe('dark')
+    expect(sanitizeSessionState({}).theme).toBe('system')
+    expect(sanitizeSessionState({ theme: 'ember' }).theme).toBe('system')
+    expect(sanitizeSessionState({ theme: 42 }).theme).toBe('system')
+  })
+
+  // A pop-out's own panel-canvas tree/videoFit (decision 2026-07-20; see
+  // src/shared/ipc.ts's PopoutState) replace the old `video: VideoLayoutState`
+  // uniform/emphasized/fill-panel field — these exercise sanitizePopout's
+  // migration/never-throw contract the same way the panelLayout tests above
+  // exercise sanitizePanelLayoutSession's.
+  describe('pop-out tree migration/sanitize', () => {
+    it('a legacy pop-out slice (old video: VideoLayoutState, no tree/videoFit at all) migrates to a fresh tree built from its own feedIds', () => {
+      const s = sanitizeSessionState({
+        popouts: [
+          {
+            id: 1,
+            bounds: bounds(100, 100),
+            feedIds: ['warbirds', 'vintage'],
+            video: { mode: 'emphasized', emphasizedFeedId: 'warbirds', fillPanelFeedId: null },
+            volumes: {}
+          }
+        ]
+      })
+      expect(s.popouts).toHaveLength(1)
+      const p = s.popouts[0]
+      expect(p.tree).toEqual(buildBalancedGrid(['warbirds', 'vintage'].map(videoLeaf)))
+      expect(p.videoFit).toEqual({})
+      expect(p).not.toHaveProperty('video')
+    })
+
+    it('a corrupt tree sanitizes to a fresh grid from feedIds rather than nulling the whole slice, and malformed videoFit entries drop individually', () => {
+      const s = sanitizeSessionState({
+        popouts: [
+          {
+            id: 1,
+            bounds: bounds(),
+            feedIds: ['warbirds'],
+            tree: { type: 'nonsense' },
+            videoFit: { warbirds: 'bogus', vintage: 'fill' },
+            volumes: {}
+          }
+        ]
+      })
+      const p = s.popouts[0]
+      expect(p.tree).toEqual({ type: 'leaf', id: 'video:warbirds' })
+      expect(p.videoFit).toEqual({ vintage: 'fill' }) // 'bogus' dropped, valid entry kept
+    })
+
+    it('a pop-out slice with zero feeds and no tree sanitizes to a null tree rather than throwing', () => {
+      const s = sanitizeSessionState({
+        popouts: [{ id: 1, bounds: bounds(), feedIds: [], volumes: {} }]
+      })
+      expect(s.popouts[0].tree).toBeNull()
+      expect(s.popouts[0].feedIds).toEqual([])
+    })
+
+    it('keeps an already well-formed pop-out tree as-is', () => {
+      const tree = buildBalancedGrid(['warbirds'].map(videoLeaf))
+      const s = sanitizeSessionState({
+        popouts: [
+          { id: 1, bounds: bounds(), feedIds: ['warbirds'], tree, videoFit: {}, volumes: {} }
+        ]
+      })
+      expect(s.popouts[0].tree).toEqual(tree)
+    })
   })
 })
 
@@ -176,21 +301,38 @@ describe('applySessionPatch', () => {
     expect(state.window).toBeNull()
   })
 
-  it('merges layout entries without dropping existing keys', () => {
-    let state = applySessionPatch(defaultSessionState(), { layout: { g1: 'a' } })
-    state = applySessionPatch(state, { layout: { g2: 'b' } })
-    expect(state.layout).toEqual({ g1: 'a', g2: 'b' })
+  it('replaces panelLayout wholesale (whole-section replace, like window)', () => {
+    const section = {
+      tree: { type: 'leaf' as const, id: 'fr24' as const },
+      maximizedPanelId: null,
+      videoFit: {},
+      profiles: []
+    }
+    const state = applySessionPatch(defaultSessionState(), { panelLayout: section })
+    expect(state.panelLayout).toEqual(section)
   })
 
-  it('replaces the video layout wholesale', () => {
-    const state = applySessionPatch(defaultSessionState(), {
-      video: { mode: 'emphasized', emphasizedFeedId: 'x', fillPanelFeedId: null }
-    })
-    expect(state.video).toEqual({
-      mode: 'emphasized',
-      emphasizedFeedId: 'x',
-      fillPanelFeedId: null
-    })
+  it('clears panelLayout with an explicit null, but an absent key leaves it untouched', () => {
+    const section = {
+      tree: { type: 'leaf' as const, id: 'fr24' as const },
+      maximizedPanelId: null,
+      videoFit: {},
+      profiles: []
+    }
+    let state = applySessionPatch(defaultSessionState(), { panelLayout: section })
+    state = applySessionPatch(state, { fr24: { lastUrl: 'https://x' } }) // no panelLayout key at all
+    expect(state.panelLayout).toEqual(section)
+    state = applySessionPatch(state, { panelLayout: null })
+    expect(state.panelLayout).toBeNull()
+  })
+
+  it('replaces the theme and is a no-op when the patch omits it', () => {
+    let state = applySessionPatch(defaultSessionState(), { theme: 'dark' })
+    expect(state.theme).toBe('dark')
+    state = applySessionPatch(state, { fr24: { lastUrl: 'https://x' } })
+    expect(state.theme).toBe('dark')
+    state = applySessionPatch(state, { theme: 'light' })
+    expect(state.theme).toBe('light')
   })
 })
 
@@ -218,16 +360,31 @@ describe('pop-out operations', () => {
     expect(removePopout(withTwo, 99).popouts).toHaveLength(2)
   })
 
-  it('patchPopout merges layout / volumes / feeds into the matching pop-out only', () => {
+  it('patchPopout merges tree / videoFit / volumes / feeds into the matching pop-out only', () => {
+    const newTree = buildBalancedGrid(['vintage', 'ultralights'].map(videoLeaf))
     const patched = patchPopout(withTwo, 2, {
-      video: { mode: 'emphasized', emphasizedFeedId: 'vintage', fillPanelFeedId: null },
+      tree: newTree,
+      videoFit: { vintage: 'fill' },
       volumes: { vintage: { volume: 30, muted: false } }
     })
     const two = patched.popouts.find((p) => p.id === 2)!
-    expect(two.video.mode).toBe('emphasized')
+    expect(two.tree).toEqual(newTree)
+    expect(two.videoFit).toEqual({ vintage: 'fill' })
     expect(two.volumes.vintage).toEqual({ volume: 30, muted: false })
     // Pop-out 1 untouched.
-    expect(patched.popouts.find((p) => p.id === 1)?.video.mode).toBe('uniform')
+    const one = patched.popouts.find((p) => p.id === 1)!
+    expect(one.tree).toEqual(popout(1, ['warbirds']).tree)
+    expect(one.videoFit).toEqual({})
+  })
+
+  it('patchPopout clears tree with an explicit null (distinct from an absent key)', () => {
+    const patched = patchPopout(withTwo, 1, { tree: null, feedIds: [] })
+    const one = patched.popouts.find((p) => p.id === 1)!
+    expect(one.tree).toBeNull()
+    expect(one.feedIds).toEqual([])
+    // An absent tree key leaves the existing tree untouched.
+    const untouched = patchPopout(withTwo, 1, { feedIds: ['warbirds'] })
+    expect(untouched.popouts.find((p) => p.id === 1)?.tree).toEqual(popout(1, ['warbirds']).tree)
   })
 
   it('poppedOutFeedIds unions every open pop-out feed', () => {
@@ -241,5 +398,100 @@ describe('pop-out operations', () => {
       { id: 2, feedIds: ['vintage', 'ultralights'] }
     ])
     expect(summaries[0].feedIds).not.toBe(withTwo.popouts[0].feedIds)
+  })
+})
+
+// The "Merge into…" control's math (decision 2026-07-20): moving one pop-out's
+// feeds + volumes + fit/fill + TREE into another and dropping the source,
+// exercised pure so it is testable without a BrowserWindow (see
+// src/main/popouts.ts's mergePopout).
+describe('mergePopouts', () => {
+  const withTwo: SessionState = (() => {
+    let s = defaultSessionState()
+    s = upsertPopout(s, popout(1, ['warbirds']))
+    s = upsertPopout(s, popout(2, ['vintage', 'ultralights']))
+    return s
+  })()
+
+  it('moves the source feeds + per-feed volumes into the target and drops the source', () => {
+    let state = withTwo
+    state = patchPopout(state, 1, { volumes: { warbirds: { volume: 40, muted: true } } })
+    state = patchPopout(state, 2, { volumes: { vintage: { volume: 60, muted: false } } })
+
+    const merged = mergePopouts(state, 1, 2)
+    expect(merged).not.toBeNull()
+    expect(merged!.popouts.map((p) => p.id)).toEqual([2])
+
+    const target = merged!.popouts[0]
+    expect(target.feedIds).toEqual(['vintage', 'ultralights', 'warbirds'])
+    expect(target.volumes).toEqual({
+      vintage: { volume: 60, muted: false },
+      warbirds: { volume: 40, muted: true }
+    })
+  })
+
+  it("combines the source's feeds into the target's tree via insertVideoLeafBottom, rather than discarding the target's own arrangement", () => {
+    const merged = mergePopouts(withTwo, 1, 2)
+    expect(merged).not.toBeNull()
+    const target = merged!.popouts[0]
+
+    // Every feed from both source and target ends up in the combined tree,
+    // exactly once.
+    expect(new Set(collectLeafIds(target.tree))).toEqual(
+      new Set(['video:vintage', 'video:ultralights', 'video:warbirds'])
+    )
+    // Matches what insertVideoLeafBottom itself produces when applied
+    // directly to the TARGET's original tree — proving the target's own
+    // arrangement is the base, not a from-scratch rebuild.
+    const expected = insertVideoLeafBottom(popout(2, ['vintage', 'ultralights']).tree, {
+      type: 'leaf',
+      id: 'video:warbirds'
+    })
+    expect(target.tree).toEqual(expected)
+  })
+
+  it('seeds the tree directly from a lone source feed when the target itself starts with no tree (zero feeds)', () => {
+    let state = defaultSessionState()
+    state = upsertPopout(state, popout(1, ['warbirds']))
+    state = upsertPopout(state, popout(2, []))
+    expect(state.popouts.find((p) => p.id === 2)!.tree).toBeNull()
+
+    const merged = mergePopouts(state, 1, 2)
+    expect(merged!.popouts[0].tree).toEqual({ type: 'leaf', id: 'video:warbirds' })
+  })
+
+  it('combines per-feed fit/fill from both slices', () => {
+    let state = withTwo
+    state = patchPopout(state, 1, { videoFit: { warbirds: 'fill' } })
+    state = patchPopout(state, 2, { videoFit: { vintage: 'fill' } })
+    const merged = mergePopouts(state, 1, 2)
+    expect(merged!.popouts[0].videoFit).toEqual({ warbirds: 'fill', vintage: 'fill' })
+  })
+
+  it('dedupes feed ids defensively if a feed somehow appears in both slices, without inserting it twice into the tree', () => {
+    let state = defaultSessionState()
+    state = upsertPopout(state, popout(1, ['warbirds']))
+    state = upsertPopout(state, popout(2, ['warbirds', 'vintage']))
+
+    const merged = mergePopouts(state, 1, 2)
+    expect(merged!.popouts[0].feedIds).toEqual(['warbirds', 'vintage'])
+    expect(collectLeafIds(merged!.popouts[0].tree)).toEqual(['video:warbirds', 'video:vintage'])
+  })
+
+  it('leaves the target bounds untouched — only the feed set and tree grow', () => {
+    const merged = mergePopouts(withTwo, 1, 2)
+    expect(merged!.popouts[0].bounds).toEqual(bounds())
+  })
+
+  it('returns null (no-op) for equal ids or an unknown id', () => {
+    expect(mergePopouts(withTwo, 1, 1)).toBeNull()
+    expect(mergePopouts(withTwo, 1, 99)).toBeNull()
+    expect(mergePopouts(withTwo, 99, 1)).toBeNull()
+  })
+
+  it('does not mutate the input state', () => {
+    const before = structuredClone(withTwo)
+    mergePopouts(withTwo, 1, 2)
+    expect(withTwo).toEqual(before)
   })
 })

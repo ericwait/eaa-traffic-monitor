@@ -6,9 +6,10 @@ import brandMark from '../../../../design/brand/svg/icon.svg'
 // A small Help/About modal — deliberately real, not a stub. It exists to PROVE
 // the z-order rule end to end: it overlaps the FR24 region, and because a
 // WebContentsView paints above all DOM, an HTML modal alone can't cover it. The
-// fix is that opening any such overlay flips `overlayOpen` in the store, which
+// fix is that opening any such overlay sets `overlay` in the store, which
 // drives fr24:setVisible(false) (wired in LayoutShell). This is the standing
-// pattern: every future overlay that can cover the FR24 region does the same.
+// pattern: every future overlay that can cover the FR24 region does the same
+// (the channel manager's Add-channel dialog registers as 'add-channel').
 
 interface AboutModalProps {
   onClose: () => void

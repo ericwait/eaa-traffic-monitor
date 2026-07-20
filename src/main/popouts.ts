@@ -2,8 +2,9 @@ import { BrowserWindow } from 'electron'
 import { join } from 'path'
 import type { OpenPopoutRequest, PopoutState, PopoutSummary, WindowBoundsState } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
-import { nextPopoutId, popoutSummaries } from '@shared/session'
-import { getSessionState, patchPopout, removePopout, upsertPopout } from './session'
+import { buildBalancedGrid, type PanelId } from '@shared/panelLayout'
+import { nextPopoutId, popoutSummaries, type PopoutSlicePatch } from '@shared/session'
+import { getSessionState, mergePopouts, patchPopout, removePopout, upsertPopout } from './session'
 import { boundsStateFor, resolveSavedBounds, trackWindowBounds } from './windowState'
 
 // Pop-out window manager (Phase 4). A pop-out is the SAME renderer bundle loaded
@@ -63,7 +64,13 @@ export class PopoutManager {
         displayId: null
       },
       feedIds: [...request.feedIds],
-      video: request.layout,
+      // The pop-out's own panel-canvas tree (decision 2026-07-20) — a fresh
+      // balanced grid over its starting feeds, the same shape a from-scratch
+      // main-window video region gets. `request.layout` (VideoLayoutState) is
+      // no longer read here; it survives on `OpenPopoutRequest` only because
+      // nothing has removed the field yet (see @shared/ipc's doc comment).
+      tree: buildBalancedGrid(request.feedIds.map((f): PanelId => `video:${f}`)),
+      videoFit: {},
       volumes: {}
     }
     upsertPopout(slice)
@@ -82,13 +89,52 @@ export class PopoutManager {
     this.windows.get(id)?.close()
   }
 
-  /** Persist a pop-out renderer's own layout / per-feed volumes into its slice. */
-  patchPopout(
-    id: number,
-    patch: { video?: PopoutState['video']; volumes?: PopoutState['volumes'] }
-  ): void {
+  /**
+   * Persist a pop-out renderer's own layout / fit / per-feed volumes / feed
+   * set into its slice. Broadcasts the open-pop-out set whenever `feedIds`
+   * is part of the patch — that's what tells every OTHER window (the main
+   * grid's `startPopoutFeedTracking`, and this feed's `MergeIntoControl`)
+   * that a feed changed hands, e.g. a per-leaf close inside a multi-feed
+   * pop-out (`usePopoutLayout`'s `closePanel`) returning just that one feed
+   * to the main window without closing the whole pop-out.
+   */
+  patchPopout(id: number, patch: PopoutSlicePatch): void {
     if (!this.windows.has(id)) return
     patchPopout(id, patch)
+    if (patch.feedIds !== undefined) this.broadcast()
+  }
+
+  /**
+   * "Merge into…": combine two pop-outs into one by moving `sourceId`'s feeds
+   * into `targetId`'s window and closing `sourceId`'s — an explicit in-window
+   * control, never window-to-window drag (unreliable in Electron), so merging
+   * is always a deliberate pick from a menu of the OTHER open pop-outs
+   * (decision 2026-07-20; see docs/design/Video.md § Pop-outs and restore).
+   *
+   * The target renderer read its slice once at bootstrap (see
+   * sessionBootstrap.ts's `currentPopoutSlice`), so — same as a relaunch
+   * restoring a slice — it is reloaded to pick up the combined feed set; there
+   * is no live feed-list patch path in the pop-out renderer today. Returns
+   * `false` (no-op, nothing closed or reloaded) if the ids are equal, either
+   * pop-out is unknown, or either window already went away (a race with a
+   * manual close).
+   */
+  mergePopout(sourceId: number, targetId: number): boolean {
+    if (sourceId === targetId) return false
+    const sourceWin = this.windows.get(sourceId)
+    const targetWin = this.windows.get(targetId)
+    if (!sourceWin || !targetWin || sourceWin.isDestroyed() || targetWin.isDestroyed()) {
+      return false
+    }
+
+    if (!mergePopouts(sourceId, targetId)) return false
+
+    if (!targetWin.webContents.isDestroyed()) targetWin.webContents.reload()
+    this.broadcast()
+    // Closing triggers the normal 'closed' handler below, which removes the
+    // source's slice (already gone — a harmless no-op) and re-broadcasts.
+    sourceWin.close()
+    return true
   }
 
   /** Create the BrowserWindow for a pop-out slice and wire its lifecycle. */

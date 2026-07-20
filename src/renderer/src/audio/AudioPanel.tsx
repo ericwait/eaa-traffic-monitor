@@ -1,19 +1,25 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../state/store'
-import WeatherPanel from '../weather/WeatherPanel'
 import { audioEngine } from './engine'
+import AddChannelModal from './AddChannelModal'
 import StreamStrip from './StreamStrip'
+import PanelChromeButtons from '../layout/PanelChromeButtons'
+import { panelHeadClassName } from '../layout/panelMeta'
 
-// The ATC Audio panel — the left pillar. Owns the panel header ("ATC Audio" +
-// a reload-config button), the config-fallback banner, the autoplay "click to
-// enable" hint, and the list of per-stream strips. All live state comes from the
-// zustand audio slice, which the engine (a plain-TS singleton) writes into; this
-// component only reads it and forwards user gestures to the engine.
+// The ATC Audio panel — its own leaf on the panel canvas (see
+// layout/LeafFrame.tsx). Owns the panel header ("ATC Audio" + a
+// reload-config button, plus the shared maximize/close chrome), the
+// config-fallback banner, the autoplay "click to enable" hint, and the list
+// of per-stream strips. All live state comes from the zustand audio slice,
+// which the engine (a plain-TS singleton) writes into; this component only
+// reads it and forwards user gestures to the engine.
 //
-// The Field Weather card is appended below the stream list — its own
-// self-contained slice of state (see WeatherPanel.tsx), sharing this panel's
-// scrollable column so the left pillar's layout stays a single Panel (no new
-// resizable region added to LayoutShell).
+// Field Weather was promoted to its own top-level panel (decision 2026-07-19)
+// — it no longer nests here; see weather/WeatherPanel.tsx, mounted by
+// LeafFrame for the 'weather' panel id.
+
+const PANEL_ID = 'audio' as const
+const PANEL_TITLE = 'ATC Audio'
 
 function AudioPanel(): React.JSX.Element {
   const order = useAppStore((s) => s.audioOrder)
@@ -21,6 +27,10 @@ function AudioPanel(): React.JSX.Element {
   const needsGesture = useAppStore((s) => s.audioNeedsGesture)
   const setBanner = useAppStore((s) => s.setAudioBanner)
   const soloId = useAppStore((s) => s.audioSolo)
+  const overlay = useAppStore((s) => s.overlay)
+  const setOverlay = useAppStore((s) => s.setOverlay)
+  const toggleMaximize = useAppStore((s) => s.toggleMaximize)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
 
   // Build + start the engine once. ensureStarted is StrictMode-safe and the
   // engine lives for the window's life, so there is deliberately no teardown on
@@ -43,9 +53,22 @@ function AudioPanel(): React.JSX.Element {
 
   return (
     <section className="audio-panel" aria-label="ATC Audio">
-      <header className="panel-head audio-head">
-        <h2 className="panel-title">ATC Audio</h2>
+      <header
+        className={panelHeadClassName('panel-head audio-head', PANEL_ID, dragPanelId)}
+        onDoubleClick={() => toggleMaximize(PANEL_ID)}
+      >
+        <h2 className="panel-title">{PANEL_TITLE}</h2>
         <div className="audio-head-spacer" />
+        <button
+          type="button"
+          className="audio-add-btn"
+          data-testid="audio-add-channel"
+          aria-label="Add a channel from LiveATC"
+          title="Add a channel from LiveATC's directory"
+          onClick={() => setOverlay('add-channel')}
+        >
+          +
+        </button>
         <button
           type="button"
           className="audio-reload-btn"
@@ -58,6 +81,7 @@ function AudioPanel(): React.JSX.Element {
         >
           &#8635;
         </button>
+        <PanelChromeButtons panelId={PANEL_ID} title={PANEL_TITLE} />
       </header>
 
       {banner && (
@@ -92,7 +116,7 @@ function AudioPanel(): React.JSX.Element {
         ))}
       </div>
 
-      <WeatherPanel />
+      {overlay === 'add-channel' && <AddChannelModal onClose={() => setOverlay(null)} />}
     </section>
   )
 }

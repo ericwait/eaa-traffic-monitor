@@ -20,6 +20,11 @@ design
 # Pre-existing GitHub community templates authored to their own conventions.
 .github/ISSUE_TEMPLATE
 
+# Captured-page test fixtures are byte-for-byte snapshots of what a server
+# actually sent (the parser must run against the page as served, tag soup and
+# all) — never reformat them.
+tests/unit/fixtures
+
 
 # Agent worktrees are separate checkouts (each runs its own formatter).
 .claude/worktrees/

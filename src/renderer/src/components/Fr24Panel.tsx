@@ -2,12 +2,21 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Fr24Bounds } from '@shared/ipc'
 import { boundsEqual, rectToBounds } from '@shared/fr24Bounds'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
+import PanelChromeButtons from '../layout/PanelChromeButtons'
+import { panelHeadClassName } from '../layout/panelMeta'
 
 // The Flight Tracking panel: a toolbar plus a NON-SCROLLING placeholder region
 // that the native FR24 WebContentsView is positioned over. The renderer never
 // draws the map — it measures where the map should be and tells the main process
 // via fr24:setBounds. The bounds math assumes no scroll offset, hence the
 // region must never scroll (see the CSS: overflow hidden, fixed to the panel).
+//
+// Its own leaf on the panel canvas (layout/LeafFrame.tsx) — the measurement
+// logic below is untouched by the panel-canvas work; only the header gains
+// the shared maximize/close chrome (layout/PanelChromeButtons.tsx).
+
+const PANEL_ID = 'fr24' as const
+const PANEL_TITLE = 'Flight Tracking'
 
 /**
  * Report the region's current rect to the main process as FR24 view bounds.
@@ -17,6 +26,8 @@ import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
  */
 function Fr24Panel(): React.JSX.Element {
   const navState = useAppStore((s) => s.navState)
+  const toggleMaximize = useAppStore((s) => s.toggleMaximize)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
   const regionRef = useRef<HTMLDivElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const lastSentRef = useRef<Fr24Bounds | null>(null)
@@ -71,8 +82,13 @@ function Fr24Panel(): React.JSX.Element {
 
   return (
     <section className="fr24-panel" aria-label="Flight Tracking">
-      <header className="panel-head">
-        <h2 className="panel-title">Flight Tracking</h2>
+      <header
+        className={panelHeadClassName('panel-head', PANEL_ID, dragPanelId)}
+        onDoubleClick={() => toggleMaximize(PANEL_ID)}
+      >
+        <h2 className="panel-title">{PANEL_TITLE}</h2>
+        <div className="panel-head-spacer" />
+        <PanelChromeButtons panelId={PANEL_ID} title={PANEL_TITLE} />
       </header>
 
       <div

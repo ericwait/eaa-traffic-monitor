@@ -1,26 +1,42 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { defaultFeeds } from '../../src/renderer/src/youtube/defaultFeeds'
 import { mainEntry, getMainWindow, e2eEnv } from './support'
 
 // Launch-smoke for the built app. Proves the packaged main process boots, the
 // renderer is served (loopback http server in packaged mode, app:// fallback),
-// the three-panel skeleton mounts, and the FR24 WebContentsView is attached to
-// the window's content view and tracks its DOM region (non-zero bounds after a
-// resize settle).
+// the panel canvas mounts every default panel, and the FR24 WebContentsView is
+// attached to the window's content view and tracks its DOM region (non-zero
+// bounds after a resize settle).
 //
 // CRITICAL: this spec must NEVER depend on flightradar24.com loading — CI is a
 // network-restricted Linux box. We point the FR24 view at about:blank via
 // FR24_URL_OVERRIDE (see support.e2eEnv) and assert attachment/bounds/toolbar,
 // never page content.
 //
+// Isolated userData (same convention as channels.spec.ts/popout.spec.ts/
+// layoutProfiles.spec.ts, PR6 "feature/panel-drag-dock" e2e-isolation fix):
+// this suite resizes the window (a session-persisting bounds write) and,
+// without its own E2E_USERDATA, would share — and could corrupt — the
+// developer's real session.json/config.json, or race whichever other spec
+// happens to run against the same default profile.
+//
 // Prerequisite: `electron-vite build` must have run so out/main/index.js and
 // out/renderer exist. `just e2e` builds first.
 
 let app: ElectronApplication
 let page: Page
+let userDataDir: string
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: [mainEntry], env: e2eEnv() })
+  userDataDir = mkdtempSync(join(tmpdir(), 'atm-e2e-launch-'))
+  app = await electron.launch({
+    args: [mainEntry],
+    env: e2eEnv({ E2E_USERDATA: userDataDir })
+  })
   await app.firstWindow() // ensure the app has booted a webContents
   page = await getMainWindow(app)
   await page.waitForLoadState('domcontentloaded')
@@ -28,6 +44,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close()
+  if (userDataDir) rmSync(userDataDir, { recursive: true, force: true })
 })
 
 test('launches to a window titled "Airshow Traffic Monitor"', async () => {
@@ -46,10 +63,16 @@ test('the BrowserWindow reports the expected title from the main process', async
   expect(title).toBe('Airshow Traffic Monitor')
 })
 
-test('renders all three panel headings', async () => {
+test('renders a heading for every default panel: audio, weather, fr24, and each video feed', async () => {
+  // The old shared "Live Video" grid heading is gone — each feed is its own
+  // panel now, titled with its own label (see docs/Panel-System-Plan.md and
+  // tests/e2e/panels.spec.ts for the fuller data-panel-id coverage).
   await expect(page.getByRole('heading', { name: 'ATC Audio' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Field Weather' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Flight Tracking' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Live Video' })).toBeVisible()
+  for (const feed of defaultFeeds) {
+    await expect(page.getByRole('heading', { name: feed.label })).toBeVisible()
+  }
 })
 
 test('renders the FR24 navigation toolbar', async () => {

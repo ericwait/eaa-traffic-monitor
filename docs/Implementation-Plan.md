@@ -1,4 +1,4 @@
-> Status: Phase 6 and the v0.1.0 tag remaining — Phases 4 and 5 shipped 2026-07-19 | Audience: contributors and agents planning next work | See also: [docs index](README.md), [Audio design](design/Audio.md), [Video design](design/Video.md), [Tracking design](design/Tracking.md), [Tech stack](development/TechStack.md)
+> Status: v0.1.0 release act pending — every feature phase (through Phase 8) has shipped to `develop`; only the owner release act remains | Audience: contributors and agents planning next work | See also: [docs index](README.md), [Audio design](design/Audio.md), [Video design](design/Video.md), [Tracking design](design/Tracking.md), [Layout design](design/Layout.md), [Tech stack](development/TechStack.md)
 
 <!--
 PLAN-DOC LIFECYCLE — read before editing.
@@ -28,22 +28,20 @@ This sprint runs agent-assisted parallel tracks once the walking skeleton lands,
 The compressed calendar (Sat Jul 18 → Wed Jul 22) is only reachable because the tracks run concurrently with AI-agent assistance; every effort estimate below assumes **solo dev + AI agents**.
 
 Two milestones are called out and are deliberately distinct: the **Monday show-open checkpoint** (a real-use gate, after Phase 2b — cleared) and the **Alpha release v0.1.0** (the tagged artifact).
-Every feature phase the alpha needs has shipped — see the Progress log; what remains is the release act itself (see the Milestone section) and Phase 6, which follows it.
+Every feature phase — including the post-alpha Phases 6 (brand skin), 7 (channel management), and 8 (panel system) — has now shipped to `develop`; see the Progress log.
+The only forward work left is the release act itself (see the Milestone section).
 
 ## Phase dependency graph
 
-Phases 0 through 5 have shipped (see the Progress log for dates and PR numbers) and collapse into one baseline node below — this file tracks forward work only, so their individual scope and risk detail live in git history, not here.
+Phases 0 through 8 have shipped (see the Progress log for dates and PR numbers) and collapse into the single baseline node below — this file tracks forward work only, so their scope and risk detail live in git history, not here.
+The only thing between here and the tagged alpha is the release act (a `develop`→`main` promotion plus the owner pushing the tag).
 
 ```mermaid
 flowchart TD
-    BASE(["Shipped baseline — Phases 0–5"])
-    P6["Phase 6 — Brand application"]
-
+    BASE(["Shipped baseline — Phases 0–8"])
     ALPHA(["Milestone: Alpha release v0.1.0"])
 
     BASE --> ALPHA
-    BASE --> P6
-    P6 -. icon slice lands before the tag .-> ALPHA
 
     classDef milestone fill:#fef3c7,stroke:#d97706,color:#7c2d12
     classDef shipped fill:#dcfce7,stroke:#16a34a,color:#14532d
@@ -51,58 +49,22 @@ flowchart TD
     class BASE shipped
 ```
 
-## Phase 6 — Brand application
-
-**Goal.** Apply the Wyvern Watch visual language everywhere the app shows identity:
-OS-level icons (dock, taskbar, launcher, installer), in-app theming from the semantic tokens, and the mark in the header and About dialog.
-Every asset already exists under [design/brand/](https://github.com/ericwait/airshow-traffic-monitor/tree/main/design/brand) — this phase wires them in; it draws nothing new.
-
-**Scope.**
-
-- Packaging icons: wire electron-builder to the shipped masters
-  (`design/brand/png/app-icon-ember-1024.png` for macOS/Linux, `design/brand/ico/favicon.ico` for Windows) per the packaging note in the design language doc,
-  generating a true multi-resolution `.icns` from the 1024 master.
-  Icon binaries stay on their existing LFS routes.
-- Renderer favicon and window identity from the shipped favicon set (`src/renderer/index.html`).
-- Token adoption: import `tokens.css` and migrate renderer stylesheets from hard-coded hexes to the semantic `--color-*` variables;
-  Ember is the shipped dark look, and Cream Classic comes along free via the adaptive tokens.
-- Typography: adopt the three stacks from the design language (display, body, mono with tabular figures for callsigns/frequencies) with system-sans fallbacks;
-  whether to bundle the font files is a decision inside the phase.
-- The mark in-app: the adaptive `icon.svg` beside the header title and in the About modal
-  (`icon-mono.svg` where a single tint is needed).
-- Docs-site identity: favicon and the social/OG images wired into the site config once Phase 5's site machinery lands.
-
-**Depends on.** The shipped baseline; nothing in Phases 4 or 5 blocks it.
-The docs-site identity item touches Phase 5's `website/` machinery, so that one item lands after Phase 5 merges.
-
-**Exit criterion.** A packaged build shows the Wyvern Watch icon in the macOS dock, Windows taskbar, and Linux launcher;
-the header and About dialog show the mark;
-renderer chrome colors come from `tokens.css` variables rather than hard-coded hexes, and flipping the OS theme swaps Ember/Cream automatically.
-
-**Estimated effort.** ~0.5 day.
-Solo dev + AI agents.
-
-**Cut-line notes.** Scheduled after the smaller post-alpha fixes;
-the packaging-icon slice is small and is preferred before the `v0.1.0` tag so the alpha installers carry the mark instead of the stock Electron icon.
-
-**Dominant risk.** Token migration touches every renderer stylesheet (medium likelihood, low impact);
-mitigated by migrating panel-by-panel against `brand-preview.html` as the visual reference.
-
 ## Milestone — Alpha release (v0.1.0)
 
-**Phases 4 and 5 have shipped; what remains is the release act itself.**
+**Every feature the alpha gates on has shipped; what remains is the release act itself.**
 Observable: tag `v0.1.0` publishes unsigned macOS / Windows / Linux installers to a GitHub Release.
 v0.1.0 is a personal-use milestone — the primary operator's cockpit for AirVenture 2026 — and the first live validation of the release pipeline, NOT a launch:
 the project is not promoted or distributed beyond personal use until LiveATC.net grants clearance for the app's use of their streams, a hard gate on any announcement (decision 2026-07-19).
-Phase 6's packaging-icon slice lands before the tag (see its cut-line notes); the rest of Phase 6 follows the release.
+Phase 6's packaging-icon slice — the only thing that ever gated the tag — is already on `main`, and `CHANGELOG.md` carries a `[0.1.0]` section, so the tag is unblocked.
+The post-alpha feature work (channel management, the brand skin, the panel system) has since shipped to `develop`, so the `develop`→`main` promotion carries all of it into the alpha.
 Distinct from the Monday checkpoint — that was a real-use gate, already cleared.
 
 ## Verification
 
 The v0.1.0 release is complete when:
 
-- [ ] CHANGELOG.md carries a `[0.1.0]` section (the release workflow gates on it).
-- [ ] The Phase 6 packaging-icon slice is merged, so installers carry the Wyvern Watch icon.
+- [x] CHANGELOG.md carries a `[0.1.0]` section (the release workflow gates on it).
+- [x] The Phase 6 packaging-icon slice is merged, so installers carry the Wyvern Watch icon (`2cfda6d`/PR #25).
 - [ ] `develop` is promoted to `main` by merge (never squash), and the Pages source is flipped to GitHub Actions right after (see [development/Pages-deployment-runbook.md](development/Pages-deployment-runbook.md)).
 - [ ] The repo owner pushes the `v0.1.0` tag and the release workflow publishes installers for all three OSes.
 
@@ -112,8 +74,6 @@ The v0.1.0 release is complete when:
      picked up; delete it from here in the same commit. -->
 
 - Contact LiveATC.net for stream-use clearance — the hard gate before any public promotion of the project.
-- Stream add/remove management UI.
-- Named layout profiles.
 - Live-stream auto-discovery polling.
 - Recording to disk.
 - Transcription / keyword alerts (local speech models on ducked buffers).
@@ -122,12 +82,19 @@ The v0.1.0 release is complete when:
 - Config hot-reload.
 - YouTube loopback-audio capture exploration.
 - Multiple simultaneous tracking panels.
+- Evaluate migrating the docs site to Zensical (the Material team's 1.x-compatible MkDocs successor) — MkDocs 2.0 removes plugins and rewrites theming with no migration path, so the toolchain is pinned to `mkdocs<2` for now (see TechStack § Known limitations).
 
 ## Progress log
 
 <!-- Append-only, reverse-chronological (newest at top). One terse line per
      completion — no adjectives, no narrative. -->
 
+- **2026-07-20** — Docs-site brand shipped, closing the last Phase 6 residual: the MkDocs site is skinned with the Wyvern Watch palette and bundled fonts, the home page is an advertisement (hero, app screenshots, three-pillar pitch, download CTAs to the latest release), and the favicon, logo, and OG social cards are wired in.
+- **2026-07-20** — Phase 8 (panel system) shipped across 6 PRs: a serializable split-tree canvas (single-container, id-sorted DOM order so rearranging never reloads a stream) replacing the hard-coded three-pillar layout — pure core (#33), canvas keystone + maximize (#34), video fill/resolution + shorter headers + bottom-row reopen (#35), close/reopen + Move-panel modal + native Layout/Panels menus + fit/fill toggle (#37), snap templates + named layout profiles (#38), header drag-to-dock + `react-resizable-panels` removed (#39).
+- **2026-07-20** — Pop-out windows can be combined via a "Merge into…" control (#36).
+- **2026-07-20** — Phase 6 brand skin shipped: Wyvern Watch tokens adopted (Cream Classic / Ember dual theme), bundled Barlow Semi Condensed + Inter woff2, persisted System/Cream/Ember toggle via `nativeTheme.themeSource` (#32).
+- **2026-07-20** — Phase 7 (channel management) shipped: in-app add/remove/reorder of ATC channels from the LiveATC directory (bundled KOSH fallback), persisted to `config.json`, applied live with no restart (#29).
+- **2026-07-19** — Phase 6 icon/mark slice shipped: Wyvern Watch packaged (`.icns` + PNG masters) and runtime window icons, renderer favicon set, in-app mark in header + About (PR #25).
 - **2026-07-19** — On-demand ATC connections shipped: status-pill connect/disconnect, calm feed-down back-off, persisted connected set (PR #23).
 - **2026-07-19** — Field-weather card shipped: METAR/TAF from aviationweather.gov with derived flight categories (PR #19).
 - **2026-07-19** — Phase 5 shipped: tag-gated 3-OS release pipeline, full CI gate, GitVersion prerelease flow, MkDocs docs site (PR #20).

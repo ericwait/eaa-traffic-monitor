@@ -1,6 +1,29 @@
 import { create } from 'zustand'
 import type { Fr24NavState, WeatherResult, WeatherSnapshot } from '@shared/ipc'
+import {
+  buildDefaultTree,
+  insertPanelBalanced,
+  insertVideoLeafBottom,
+  movePanel as movePanelOp,
+  normalizeTree,
+  removePanel,
+  updateSplitSizes as updateSplitSizesOp,
+  type DropTarget,
+  type LayoutLeaf,
+  type LayoutNode,
+  type LayoutProfile,
+  type PanelId,
+  type VideoFitMode
+} from '@shared/panelLayout'
+import {
+  applyProfileByIndex,
+  deleteProfile as deleteProfileOp,
+  renameProfile as renameProfileOp,
+  saveProfile as saveProfileOp
+} from '@shared/layoutProfiles'
+import { defaultFeeds } from '../youtube/defaultFeeds'
 import type { AudioOutputDevice } from '../audio/devices'
+import { panelKind } from '../layout/panelMeta'
 
 // The per-window live UI store (zustand). Phase 1 holds just the FR24 nav state
 // (pushed from main) and the overlay flag that drives the z-order rule. It works
@@ -15,29 +38,31 @@ const INITIAL_NAV_STATE: Fr24NavState = {
   isLoading: false
 }
 
-// ---------------------------------------------------------------------------
-// Video slice (Phase 3) — the YouTube grid's layout mode, which feed (if any)
-// is emphasized, and which feed (if any) fills the entire video panel. Live
-// per-tile state (volume/mute, player status) stays local to each VideoTile —
-// only the cross-tile layout decisions belong in shared UI state, same
-// "only what other things need to react to" principle as overlayOpen above.
-// ---------------------------------------------------------------------------
-
-export type VideoLayoutMode = 'uniform' | 'emphasized'
+/**
+ * The overlays that can cover the FR24 region (each hides the native view).
+ * `'move-panel'` (PR4 of the panel-system effort) is the accessible,
+ * e2e-deterministic move path — see layout/MovePanelModal.tsx — landed BEFORE
+ * pointer-driven drag-to-dock (`feature/panel-drag-dock`); see
+ * docs/decisions/README.md (decision 2026-07-20). `'layout-manager'` (PR5) is
+ * the snap template gallery + named-profile CRUD dialog — see
+ * layout/LayoutManagerModal.tsx — opened from the native Layout menu's
+ * "Main Window Layout…" item (src/main/menu.ts).
+ */
+export type OverlayKind = 'about' | 'add-channel' | 'move-panel' | 'layout-manager'
 
 export interface AppState {
   /** Latest FR24 navigation state, mirrored from the main process. */
   navState: Fr24NavState
   /**
-   * True while a DOM overlay/modal is open over the FR24 region. Because the
-   * WebContentsView paints ABOVE all DOM, this flag drives fr24:setVisible(false)
-   * so the overlay is actually visible — the standing z-order pattern (see
-   * CLAUDE.md gotchas). Every future overlay that can cover the FR24 region must
-   * set this the same way.
+   * Which DOM overlay/modal is open over the FR24 region, or null. Because the
+   * WebContentsView paints ABOVE all DOM, a non-null value drives
+   * fr24:setVisible(false) so the overlay is actually visible — the standing
+   * z-order pattern (see CLAUDE.md gotchas). Every future overlay that can cover
+   * the FR24 region must register itself the same way.
    */
-  overlayOpen: boolean
+  overlay: OverlayKind | null
   setNavState: (navState: Fr24NavState) => void
-  setOverlayOpen: (overlayOpen: boolean) => void
+  setOverlay: (overlay: OverlayKind | null) => void
 
   // --- Audio slice (Phase 2a) ---------------------------------------------
   /** Per-stream UI state, keyed by stream id (see AudioStreamUi). */
@@ -66,8 +91,19 @@ export interface AppState {
    * (see audio/devices.ts) and prepended by the picker, so it is NOT in this list.
    */
   audioOutputs: AudioOutputDevice[]
+  /**
+   * The strip currently being drag-reordered, or null. Live UI state for the
+   * channel manager's drag: the dragged strip styles itself and the list
+   * previews the new order (audioOrder is rewritten during the drag, then
+   * committed — or reverted — on release; see audio/reorder.ts).
+   */
+  audioDragId: string | null
   /** Replace the whole stream set (engine build / rebuild). */
   initAudioStreams: (streams: AudioStreamUi[]) => void
+  /** Rewrite the display order only (drag preview; ids must match the set). */
+  setAudioOrder: (order: string[]) => void
+  /** Mark/unmark the strip being drag-reordered. */
+  setAudioDragId: (id: string | null) => void
   /** Shallow-merge a patch into one stream's UI state. */
   patchAudioStream: (id: string, patch: Partial<AudioStreamUi>) => void
   /** Set or clear the config fallback banner. */
@@ -78,21 +114,94 @@ export interface AppState {
   setAudioSolo: (id: string | null) => void
   /** Replace the enumerated output-device list. */
   setAudioOutputs: (outputs: AudioOutputDevice[]) => void
-  /** 'uniform' (grid, all tiles equal) or 'emphasized' (one big tile + rail). */
-  videoLayoutMode: VideoLayoutMode
-  /** The feed id occupying the emphasized "big" tile; null in uniform mode. */
-  emphasizedFeedId: string | null
-  /** The feed id filling the ENTIRE video panel (grid hidden); null otherwise. */
-  fillPanelFeedId: string | null
+  // --- Panel-layout canvas slice (PR2 of the panel-system effort) ---------
+  // (decision 2026-07-19) The main window's video grid modes (uniform /
+  // emphasized / fill-panel) are retired in favor of the panel canvas's
+  // maximize (any panel, not just video) plus a per-feed fit/fill toggle;
+  // pop-outs keep their own uniform/emphasized/fill grid (see
+  // VideoLayoutState/PopoutState in @shared/ipc, untouched). See
+  // docs/Panel-System-Plan.md and docs/decisions/README.md.
   /**
-   * Double-click behavior: emphasizing the same feed again demotes it back to
-   * uniform mode; emphasizing a different feed re-targets the big tile.
+   * The serializable split tree PanelCanvas renders (see @shared/panelLayout).
+   * Never null after hydration — sessionBootstrap falls back to
+   * buildDefaultTree for an absent/corrupt session, so this starting value
+   * (also buildDefaultTree) is only ever visible for the instant before
+   * hydratePanelLayout's synchronous pre-mount setState runs.
    */
-  toggleEmphasizedFeed: (feedId: string) => void
-  /** Fill-panel button (or double-click while already emphasized). */
-  setFillPanelFeedId: (feedId: string | null) => void
-  /** Escape / close affordance — always returns to the grid. */
-  exitFillPanel: () => void
+  panelTree: LayoutNode
+  /**
+   * Bumped on every STRUCTURAL tree commit (open/close/apply-tree, a settled
+   * splitter drag) — LayoutShell's FR24-relayout effect keys off this instead
+   * of deep-comparing the tree on every render.
+   */
+  layoutRevision: number
+  /** The one leaf occupying the full canvas, or null. Every other leaf gets `visibility: hidden` (LeafFrame) — never unmounted, so a video keeps playing while maximized elsewhere. */
+  maximizedPanelId: PanelId | null
+  /** Non-null only for the duration of a header-drag-to-dock gesture (wired for `feature/panel-drag-dock`); included in the FR24 visibility rule now so that rule needs no change when drag lands. */
+  dragPanelId: PanelId | null
+  /** Per-feed video fit/fill mode, keyed by the bare feed id (not the `video:` panel id). Absent = 'fit' (the default). */
+  videoFit: Record<string, VideoFitMode>
+  /** Named, saved tree snapshots (the `feature/layout-snaps` gallery + profile CRUD land later; the field exists now so session round-trips never drop a restored profile). */
+  layoutProfiles: LayoutProfile[]
+  /** Which saved profile currently matches the canvas, for UI highlighting only — store-only (never persisted) and cleared by any structural edit, since an edit means the canvas no longer matches that profile exactly. */
+  activeProfileName: string | null
+  /**
+   * The panel MovePanelModal is currently open for, or null. Momentary UI
+   * state (never persisted) — mirrors the `dragPanelId`/`audioDragId`
+   * pattern. Non-null exactly while `overlay === 'move-panel'`; see
+   * `openMovePanel`.
+   */
+  movePanelId: PanelId | null
+
+  /** Replace the whole tree (hydrate, a sanitizer fallback, a future template/profile apply). Normalizes on the way in. */
+  applyTree: (tree: LayoutNode) => void
+  /** Remove a leaf (a LeafFrame close button, or a feed handed off to a new pop-out). A no-op if `id` would empty the whole tree. */
+  closePanel: (id: PanelId) => void
+  /** Reopen/insert a leaf — joins the largest all-leaf group (rebalanced) or splits 50/50 (a pop-out's feed returning, or a future reopen menu). A no-op if `id` is already present. */
+  openPanel: (leaf: LayoutLeaf) => void
+  /** Commit a settled splitter drag's sizes for one split id (the ephemeral, in-progress sizes live in PanelCanvas's own local state — this is the release-time store write). */
+  updateSplitSizes: (splitId: string, sizes: readonly number[]) => void
+  /** Toggle maximize for `id` — maximizing an already-maximized id restores (also triggered by Escape, wired in LayoutShell). */
+  toggleMaximize: (id: PanelId) => void
+  /** Set one feed's fit/fill mode. */
+  setVideoFit: (feedId: string, mode: VideoFitMode) => void
+  /** Mark/unmark the panel being header-drag-dragged. */
+  setDragPanelId: (id: PanelId | null) => void
+  /** Move `id` to `target` (MovePanelModal's commit, and the future header-drag-to-dock landing). A no-op per the pure op's own rules (self-drop, stale ids, only-leaf). */
+  movePanel: (id: PanelId, target: DropTarget) => void
+  /**
+   * Commit a header-drag-to-dock gesture (`layout/useHeaderDrag.ts`'s
+   * pointerup) as ONE store write: applies `movePanel` AND clears
+   * `dragPanelId` together (docs/Panel-System-Plan.md § Store slice's
+   * single-writer sequencing) — never call `movePanel` then
+   * `setDragPanelId(null)` as two separate writes for a drag commit, or the
+   * FR24 hidden->visible transition could key off a stale intermediate state.
+   */
+  commitDrag: (id: PanelId, target: DropTarget) => void
+  /** Open MovePanelModal for `id` (sets `overlay: 'move-panel'` + `movePanelId`). */
+  openMovePanel: (id: PanelId) => void
+  /** Set/clear which panel MovePanelModal targets — used by the modal's own close handler alongside `setOverlay(null)`. */
+  setMovePanelId: (id: PanelId | null) => void
+  /**
+   * Save the CURRENT canvas tree as a named profile (LayoutManagerModal's
+   * "Save current layout as…" form) — delegates to `@shared/layoutProfiles`'
+   * `saveProfile` (upserts by exact name match; a blank/whitespace name is a
+   * no-op). Marks the new/updated profile as the active one, since the
+   * canvas now matches it exactly.
+   */
+  saveProfile: (name: string) => void
+  /** Rename the profile at `index` (a no-op per the pure op's rules: blank name, unchanged name, or a collision with another profile's name). Keeps `activeProfileName` in step when the renamed profile was the active one. */
+  renameProfile: (index: number, name: string) => void
+  /** Delete the profile at `index`. Clears `activeProfileName` if that was the deleted profile — the canvas itself is untouched. */
+  deleteProfile: (index: number) => void
+  /**
+   * Apply the profile at `index` to the canvas. Unlike `applyTree` (used for
+   * a template instantiation, which always CLEARS `activeProfileName` — a
+   * template isn't a saved profile), this SETS `activeProfileName` to the
+   * applied profile's name, so the modal/menu can highlight which saved
+   * profile currently matches the canvas.
+   */
+  applyProfile: (index: number) => void
 
   // --- Weather slice (field METAR/TAF) ------------------------------------
   /** Latest weather snapshot (from a get/refresh call or a poll push), or null before the first successful fetch. */
@@ -125,9 +234,9 @@ export interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   navState: INITIAL_NAV_STATE,
-  overlayOpen: false,
+  overlay: null,
   setNavState: (navState) => set({ navState }),
-  setOverlayOpen: (overlayOpen) => set({ overlayOpen }),
+  setOverlay: (overlay) => set({ overlay }),
 
   audioStreams: {},
   audioOrder: [],
@@ -135,11 +244,14 @@ export const useAppStore = create<AppState>((set) => ({
   audioNeedsGesture: false,
   audioSolo: null,
   audioOutputs: [],
+  audioDragId: null,
   initAudioStreams: (streams) =>
     set({
       audioStreams: Object.fromEntries(streams.map((s) => [s.id, s])),
       audioOrder: streams.map((s) => s.id)
     }),
+  setAudioOrder: (audioOrder) => set({ audioOrder }),
+  setAudioDragId: (audioDragId) => set({ audioDragId }),
   patchAudioStream: (id, patch) =>
     set((state) => {
       const current = state.audioStreams[id]
@@ -150,18 +262,144 @@ export const useAppStore = create<AppState>((set) => ({
   setAudioNeedsGesture: (audioNeedsGesture) => set({ audioNeedsGesture }),
   setAudioSolo: (audioSolo) => set({ audioSolo }),
   setAudioOutputs: (audioOutputs) => set({ audioOutputs }),
-  videoLayoutMode: 'uniform',
-  emphasizedFeedId: null,
-  fillPanelFeedId: null,
-  toggleEmphasizedFeed: (feedId) =>
+  // Placeholder until hydratePanelLayout's synchronous pre-mount setState
+  // (see state/sessionBootstrap.ts) replaces it with the restored/pruned tree
+  // — mirrors the same shape so a render that somehow raced the hydrate would
+  // still show something sane rather than an empty canvas.
+  panelTree: buildDefaultTree(defaultFeeds.map((f) => f.id)),
+  layoutRevision: 0,
+  maximizedPanelId: null,
+  dragPanelId: null,
+  videoFit: {},
+  layoutProfiles: [],
+  activeProfileName: null,
+  movePanelId: null,
+
+  applyTree: (tree) =>
     set((state) => {
-      const alreadyEmphasized = state.emphasizedFeedId === feedId
-      return alreadyEmphasized
-        ? { videoLayoutMode: 'uniform', emphasizedFeedId: null }
-        : { videoLayoutMode: 'emphasized', emphasizedFeedId: feedId }
+      const normalized = normalizeTree(tree)
+      if (normalized === state.panelTree) return state
+      return {
+        panelTree: normalized,
+        layoutRevision: state.layoutRevision + 1,
+        activeProfileName: null
+      }
     }),
-  setFillPanelFeedId: (feedId) => set({ fillPanelFeedId: feedId }),
-  exitFillPanel: () => set({ fillPanelFeedId: null }),
+
+  closePanel: (id) =>
+    set((state) => {
+      const next = removePanel(state.panelTree, id)
+      // `next === null` would mean id was the tree's only leaf — refuse rather
+      // than leave the canvas with nothing to render.
+      if (next === null || next === state.panelTree) return state
+      return {
+        panelTree: next,
+        layoutRevision: state.layoutRevision + 1,
+        maximizedPanelId: state.maximizedPanelId === id ? null : state.maximizedPanelId,
+        activeProfileName: null
+      }
+    }),
+
+  openPanel: (leaf) =>
+    set((state) => {
+      // Fix C (docs/Panel-System-Plan.md, decision 2026-07-20): a returning
+      // video leaf (pop-out close, the only reopen path today) always joins
+      // the BOTTOM ROW of the video region — insertPanelBalanced's largest-
+      // all-leaf-group heuristic can otherwise pick the audio/weather pair
+      // (e.g. when exactly one video feed remains, buildBalancedGrid
+      // represents it as a bare leaf, not a joinable split) and land the
+      // panel in the left column. Non-video reopens keep insertPanelBalanced.
+      const next =
+        panelKind(leaf.id) === 'video'
+          ? insertVideoLeafBottom(state.panelTree, leaf)
+          : insertPanelBalanced(state.panelTree, leaf)
+      if (next === state.panelTree) return state
+      return { panelTree: next, layoutRevision: state.layoutRevision + 1, activeProfileName: null }
+    }),
+
+  updateSplitSizes: (splitId, sizes) =>
+    set((state) => {
+      const next = updateSplitSizesOp(state.panelTree, splitId, sizes)
+      if (next === state.panelTree) return state
+      return { panelTree: next, layoutRevision: state.layoutRevision + 1, activeProfileName: null }
+    }),
+
+  toggleMaximize: (id) =>
+    set((state) => ({ maximizedPanelId: state.maximizedPanelId === id ? null : id })),
+
+  setVideoFit: (feedId, mode) =>
+    set((state) => ({ videoFit: { ...state.videoFit, [feedId]: mode } })),
+
+  setDragPanelId: (dragPanelId) => set({ dragPanelId }),
+
+  movePanel: (id, target) =>
+    set((state) => {
+      const next = movePanelOp(state.panelTree, id, target)
+      if (next === state.panelTree) return state
+      return { panelTree: next, layoutRevision: state.layoutRevision + 1, activeProfileName: null }
+    }),
+
+  commitDrag: (id, target) =>
+    set((state) => {
+      const next = movePanelOp(state.panelTree, id, target)
+      if (next === state.panelTree) return { dragPanelId: null }
+      return {
+        panelTree: next,
+        layoutRevision: state.layoutRevision + 1,
+        activeProfileName: null,
+        dragPanelId: null
+      }
+    }),
+
+  openMovePanel: (id) => set({ overlay: 'move-panel', movePanelId: id }),
+  setMovePanelId: (movePanelId) => set({ movePanelId }),
+
+  saveProfile: (name) =>
+    set((state) => {
+      const nextProfiles = saveProfileOp(state.layoutProfiles, name, state.panelTree)
+      if (nextProfiles === state.layoutProfiles) return state // blank/whitespace name — rejected
+      // saveProfileOp already validated `name` is non-blank (else it would
+      // have returned the same reference above), so trimming again here is
+      // exactly the name it saved under.
+      return { layoutProfiles: nextProfiles, activeProfileName: name.trim() }
+    }),
+
+  renameProfile: (index, name) =>
+    set((state) => {
+      const oldName = state.layoutProfiles[index]?.name
+      const nextProfiles = renameProfileOp(state.layoutProfiles, index, name)
+      if (nextProfiles === state.layoutProfiles) return state
+      const renamedTo = nextProfiles[index].name
+      return {
+        layoutProfiles: nextProfiles,
+        activeProfileName: state.activeProfileName === oldName ? renamedTo : state.activeProfileName
+      }
+    }),
+
+  deleteProfile: (index) =>
+    set((state) => {
+      const deletedName = state.layoutProfiles[index]?.name
+      const nextProfiles = deleteProfileOp(state.layoutProfiles, index)
+      if (nextProfiles === state.layoutProfiles) return state
+      return {
+        layoutProfiles: nextProfiles,
+        activeProfileName: state.activeProfileName === deletedName ? null : state.activeProfileName
+      }
+    }),
+
+  applyProfile: (index) =>
+    set((state) => {
+      const tree = applyProfileByIndex(state.layoutProfiles, index)
+      if (tree === null) return state
+      const normalized = normalizeTree(tree)
+      const targetName = state.layoutProfiles[index].name
+      if (normalized === state.panelTree && state.activeProfileName === targetName) return state
+      return {
+        panelTree: normalized,
+        layoutRevision: state.layoutRevision + 1,
+        activeProfileName: targetName
+      }
+    }),
 
   weatherSnapshot: null,
   weatherError: null,
@@ -179,12 +417,13 @@ export const useAppStore = create<AppState>((set) => ({
 }))
 
 /**
- * Custom DOM event the layout dispatches when a resizable panel divider moves,
- * so the FR24 region can re-measure and re-sync its native view bounds. A plain
- * window event keeps the layout and the FR24 panel decoupled and avoids a store
- * write (and re-render) on every pointer move during a drag.
+ * Re-exported for this module's existing consumers (LayoutShell.tsx,
+ * Fr24Panel.tsx) — the constant itself now lives in layout/relayoutEvent.ts
+ * so the window-agnostic panel canvas (Splitter.tsx) never needs to import
+ * this main-window store just for a constant string (decision 2026-07-20;
+ * see LayoutController.ts and docs/decisions/README.md).
  */
-export const FR24_RELAYOUT_EVENT = 'fr24-relayout'
+export { FR24_RELAYOUT_EVENT } from '../layout/relayoutEvent'
 
 // ---------------------------------------------------------------------------
 // Audio slice types (Phase 2a). The engine (a plain-TS singleton) writes these;

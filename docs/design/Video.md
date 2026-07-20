@@ -51,6 +51,8 @@ Emphasis follows attention: any feed can be promoted and demoted again, and the 
 - **Pop-outs and restore.**
   Any subset of feeds, in their own layout, can be carried into a pop-out window for a second or third monitor — multi-monitor is a first-class use, not an afterthought (today's hand-arranged setup already spans two monitors out of necessity; see [assets/prototype-2026-07-18-landscape.jpg](assets/prototype-2026-07-18-landscape.jpg)).
   Every layout, feed assignment, and pop-out window restores exactly on relaunch (decision 2026-07-18) — the operator arranges once for the week, not once per session.
+  Two pop-outs are combined through an explicit **"Merge into…"** control in each pop-out window, never by dragging one window onto another — Electron has no reliable window-onto-window drop target (decision 2026-07-20).
+  Picking another open pop-out from the list moves this window's feed(s) — carrying their per-feed volume/mute — into the target, which re-grids to show the combined set, and closes this window.
 
 ## Risks and known limitations
 

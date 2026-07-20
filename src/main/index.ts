@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol } from 'electron'
+import { app, BrowserWindow, nativeTheme, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 // Runtime window icon (Windows/Linux). electron-vite copies this PNG into out/
@@ -10,7 +10,8 @@ import { APP_SCHEME, APP_ORIGIN, registerAppScheme } from './protocol'
 import { startRendererServer } from './rendererServer'
 import type { RendererServer } from './rendererServer'
 import { Fr24Controller } from './fr24'
-import { registerFr24Ipc, registerGlobalIpc } from './ipc'
+import { registerFr24Ipc, registerGlobalIpc, registerLayoutMenuIpc } from './ipc'
+import { createLayoutMenuController } from './menu'
 import { flushSession, getSessionState, patchSessionState } from './session'
 import { resolveSavedBounds, trackWindowBounds } from './windowState'
 import { PopoutManager } from './popouts'
@@ -33,12 +34,25 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
+// E2E isolation: the Playwright suites exercise flows that WRITE to userData
+// (the channel manager rewrites config.json; session.json persists constantly),
+// so the harness points the app at a throwaway directory rather than mutating
+// the operator's real profile. Must run before app `ready` (userData is read
+// lazily but early); ignored entirely outside the harness.
+if (process.env.E2E_USERDATA) {
+  app.setPath('userData', process.env.E2E_USERDATA)
+}
+
 let mainWindow: BrowserWindow | null = null
 let fr24: Fr24Controller | null = null
 let weatherPoller: WeatherPoller | null = null
 let disposeFr24Ipc: (() => void) | null = null
 let disposeGlobalIpc: (() => void) | null = null
 let disposeBoundsTracking: (() => void) | null = null
+// The native application menu's Panels/Layout controller (PR4 of the
+// panel-system effort) — per-main-window, like the FR24 view/IPC, since the
+// menu reflects that window's panel canvas (see src/main/menu.ts).
+let disposeLayoutMenuIpc: (() => void) | null = null
 // The loopback renderer server (Phase 2b, decision 2026-07-19). Started once and
 // reused across window (re)creation; closed on quit.
 let rendererServer: RendererServer | null = null
@@ -136,6 +150,12 @@ function createWindow(): void {
   // are app-global (registered once at ready) so pop-outs share them.
   disposeFr24Ipc = registerFr24Ipc(fr24)
 
+  // The native Panels/Layout menu is also per-main-window (see menu.ts's doc
+  // comment) — apply a default menu immediately, then rebuild it on every
+  // layout:menuSync push from the renderer's menuBridge.
+  const layoutMenu = createLayoutMenuController(mainWindow)
+  disposeLayoutMenuIpc = registerLayoutMenuIpc(layoutMenu)
+
   // Persist the main window's bounds/display on every move/resize (debounced by
   // the session store) so a relaunch reopens exactly where it was left.
   disposeBoundsTracking = trackWindowBounds(mainWindow, (bounds) =>
@@ -156,6 +176,8 @@ function createWindow(): void {
     disposeBoundsTracking = null
     disposeFr24Ipc?.()
     disposeFr24Ipc = null
+    disposeLayoutMenuIpc?.()
+    disposeLayoutMenuIpc = null
     fr24?.dispose()
     fr24 = null
     weatherPoller?.stop()
@@ -181,6 +203,13 @@ app
     // Set the AppUserModelId on Windows so notifications and taskbar grouping
     // attribute to this app rather than the generic Electron identity.
     electronApp.setAppUserModelId('com.ericwait.airshow-traffic-monitor')
+
+    // Apply the persisted theme (System/Cream/Ember) BEFORE any window is
+    // created, so the very first paint already matches — nativeTheme.themeSource
+    // drives prefers-color-scheme in every renderer at once, so pop-outs and OS
+    // window chrome follow with zero per-window sync code (decision 2026-07-19;
+    // see docs/decisions/README.md and docs/WYVERN-RESKIN-PLAN.md Step 3).
+    nativeTheme.themeSource = getSessionState().theme
 
     // Wire the app:// scheme to the packaged renderer files whenever we are not
     // pointed at the dev server (same discriminator as the load path above).
