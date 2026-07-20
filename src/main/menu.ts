@@ -8,9 +8,11 @@ import { IpcChannels } from '@shared/ipc'
 //   - Panels: a checkbox per panel id (audio, weather, fr24, each `video:`
 //     feed), toggling it open/closed in the renderer's canvas.
 //   - Layout: "Reset to Default Layout", plus (PR5, `feature/layout-snaps`) a
-//     "Layout Manager…" launcher for LayoutManagerModal (the template gallery
-//     + named-profile CRUD dialog) and one radio item per saved profile, the
-//     first nine carrying `CmdOrCtrl+Alt+1..9` accelerators.
+//     "Main Window Layout…" launcher for LayoutManagerModal (the template
+//     gallery + named-profile CRUD dialog — retitled in the
+//     panel-canvas-decouple effort to make clear it governs the MAIN window
+//     only) and one radio item per saved profile, the first nine carrying
+//     `CmdOrCtrl+Alt+1..9` accelerators.
 //
 // (decision 2026-07-20) Native menus + a DOM Move-panel modal are the
 // FR24-safe/accessible move paths landed now; custom pointer-driven
@@ -82,7 +84,7 @@ export function buildApplicationMenu(
         },
         { type: 'separator' },
         {
-          label: 'Layout Manager…',
+          label: 'Main Window Layout…',
           click: () => sendCommand({ type: 'open-layout-manager' })
         },
         ...profileItems

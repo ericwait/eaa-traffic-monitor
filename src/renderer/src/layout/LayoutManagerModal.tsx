@@ -16,10 +16,14 @@ import { panelKind, panelTitle, videoFeedIdOf } from './panelMeta'
 // gallery + per-zone assignment (docs/Panel-System-Plan.md § Key
 // interactions § Snaps), plus named-profile CRUD (save/apply/rename/delete),
 // in one modal. Opened via the `overlay` pattern (`'layout-manager'`) from
-// the native Layout menu's "Layout Manager…" item ONLY (src/main/menu.ts /
-// layout/menuBridge.ts's `open-layout-manager` command) — same z-order
+// the native Layout menu's "Main Window Layout…" item ONLY (src/main/menu.ts
+// / layout/menuBridge.ts's `open-layout-manager` command) — same z-order
 // reasoning as every other overlay (LayoutShell hides the native FR24 view
 // under it; see CLAUDE.md gotchas).
+//
+// Titled "Main Window Layout" (panel-canvas-decouple effort) — the panel
+// canvas this modal governs is scoped to the main window only; a pop-out
+// window's own layout, when it gets one, is a separate concept entirely.
 //
 // Applying a TEMPLATE goes through `applyTree` (which always clears
 // `activeProfileName` — a template instantiation isn't a saved profile).
@@ -324,7 +328,7 @@ function LayoutManagerModal({ onClose }: LayoutManagerModalProps): React.JSX.Ele
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="layout-manager-title" className="modal-title">
-          Layout Manager
+          Main Window Layout
         </h2>
 
         <section className="layout-manager-section">
