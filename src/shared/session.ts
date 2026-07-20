@@ -21,6 +21,7 @@ import type {
   VideoLayoutState,
   WindowBoundsState
 } from './ipc'
+import { sanitizePanelLayoutSession } from './panelLayout'
 
 /**
  * The main-process pop-out slice patch: the renderer's PopoutPatch fields
@@ -41,6 +42,7 @@ export function defaultSessionState(): SessionState {
     window: null,
     layout: {},
     video: defaultVideoLayout(),
+    panelLayout: null,
     popouts: []
   }
 }
@@ -174,6 +176,9 @@ export function sanitizeSessionState(raw: unknown): SessionState {
   base.window = sanitizeWindowBounds(raw.window)
   base.layout = sanitizeRecord(raw.layout, (v) => asString(v))
   base.video = sanitizeVideoLayout(raw.video)
+  // Old sessions (and any garbage/corrupt panelLayout) sanitize to null — the
+  // caller substitutes buildDefaultTree; see panelLayout.ts's sanitizer doc.
+  base.panelLayout = sanitizePanelLayoutSession(raw.panelLayout)
 
   base.popouts = Array.isArray(raw.popouts)
     ? raw.popouts.map(sanitizePopout).filter((p): p is PopoutState => p !== undefined)
@@ -195,6 +200,7 @@ export function sanitizeSessionState(raw: unknown): SessionState {
  * - `window`: replaced wholesale (null clears it).
  * - `layout`: entries merged into the map.
  * - `fr24` / `video`: shallow-merged / replaced.
+ * - `panelLayout`: replaced wholesale, like `window` (undefined leaves it untouched, null clears it).
  */
 export function applySessionPatch(state: SessionState, patch: SessionPatch): SessionState {
   const next: SessionState = {
@@ -206,6 +212,7 @@ export function applySessionPatch(state: SessionState, patch: SessionPatch): Ses
     window: state.window ? { ...state.window } : null,
     layout: { ...state.layout },
     video: { ...state.video },
+    panelLayout: state.panelLayout,
     popouts: state.popouts
   }
 
@@ -228,6 +235,7 @@ export function applySessionPatch(state: SessionState, patch: SessionPatch): Ses
   if (patch.window !== undefined) next.window = patch.window ? { ...patch.window } : null
   if (patch.layout) next.layout = { ...next.layout, ...patch.layout }
   if (patch.video) next.video = { ...patch.video }
+  if (patch.panelLayout !== undefined) next.panelLayout = patch.panelLayout
 
   return next
 }
