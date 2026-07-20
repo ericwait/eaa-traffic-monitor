@@ -56,9 +56,14 @@ test('the main grid starts with one tile per configured feed', async () => {
 })
 
 test('popping out a feed spawns a grid-only pop-out window rendering just that feed', async () => {
-  const tile = main.locator(`[data-testid="video-tile"][data-feed-id="${POPPED.id}"]`)
-  await tile.hover()
-  await tile.getByRole('button', { name: `Pop out ${POPPED.label}` }).click()
+  // The pop-out button lives on the panel's own header now (always visible,
+  // not hover-gated) — see layout/PanelChromeButtons.tsx — rather than the
+  // video tile's hover cluster: LeafFrame's video body no longer wires
+  // VideoTile's own onPopOut prop, to avoid a second, redundant affordance.
+  await main
+    .locator(`.leaf-frame[data-panel-id="video:${POPPED.id}"]`)
+    .getByTestId(`leaf-popout-video:${POPPED.id}`)
+    .click()
 
   const popout = await getPopoutWindow(app)
   await popout.waitForLoadState('domcontentloaded')
