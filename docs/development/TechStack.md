@@ -19,7 +19,7 @@ Locked as one decision (decision 2026-07-18) rather than assembled piecemeal.
 | Dev/build | electron-vite | Dev server (HMR) and production bundling for main/preload/renderer |
 | Packaging | electron-builder | 3-OS packaging (macOS/Windows/Linux) → GitHub Releases, unsigned for alpha |
 | Renderer state | zustand | Per-window store; works outside React so the audio-engine singleton can write into it directly |
-| Layout | react-resizable-panels | Draggable/resizable panel layout (audio, FR24, video grid) |
+| Layout | In-house split-tree canvas (no dependency) | A serializable panel-layout tree, one absolutely-positioned canvas render, custom splitters + header drag-to-dock — see § Panel layout system below |
 | Config validation | zod | Validates `config.json` (feed defs, VAD/duck params) on load |
 | Session persistence | electron-store | `session.json` — window bounds, panel layout, per-stream settings, popouts — via atomic writes |
 | Unit testing | vitest | Pure-function coverage: VAD, ducking, `.pls` parser, config schema, bounds validator |
@@ -32,7 +32,7 @@ Locked as one decision (decision 2026-07-18) rather than assembled piecemeal.
 | Docs site | MkDocs Material | Generates the public GitHub Pages site from `docs/` (Phase 5); site machinery lives in `website/`, content stays in `docs/`. A Python toolchain in a TypeScript repo is the accepted tradeoff for its docs UX (decision 2026-07-18) |
 
 Electron is the pivot; see "Why this stack" below for the requirement that makes a full browser engine plus native window/process control non-negotiable.
-Everything else follows from having made that call: electron-vite and electron-builder are the standard scaffold/packaging pair for it; zustand, react-resizable-panels, and zod are small libraries that each solve one problem rather than a framework that solves all of them; and the testing/governance layer — vitest, Playwright, just, pre-commit + gitleaks, GitVersion, tiered GitHub Actions — is adapted wholesale from `project-seed-kit` rather than designed from scratch, so the alpha starts with a working CI/release pipeline instead of building one under a five-day deadline.
+Everything else follows from having made that call: electron-vite and electron-builder are the standard scaffold/packaging pair for it; zustand and zod are small libraries that each solve one problem rather than a framework that solves all of them (the panel layout itself is in-house — no layout dependency at all, see § Panel layout system below); and the testing/governance layer — vitest, Playwright, just, pre-commit + gitleaks, GitVersion, tiered GitHub Actions — is adapted wholesale from `project-seed-kit` rather than designed from scratch, so the alpha starts with a working CI/release pipeline instead of building one under a five-day deadline.
 The phased build order this stack enables — audio engine first, an early FR24 walking skeleton because bounds-sync is the biggest layout risk, YouTube grid third — is tracked in [../Implementation-Plan.md](../Implementation-Plan.md).
 
 ## Why this stack
@@ -71,7 +71,7 @@ Full session restore is backed by a single `session.json` written through `elect
 The main process holds the session state authoritatively in memory: every `session:patch` merges into that live object immediately — so a read right after a write is consistent, which the audio engine relies on — and schedules a trailing-debounced (~500 ms) atomic flush to disk.
 Coalescing a slider drag's storm of patches into one write is the point of the debounce; a guaranteed flush on `will-quit` means a last-second change still inside its debounce window is never lost.
 The merge, the defensive sanitizer, and the pop-out bookkeeping are a pure module (`src/shared/session.ts`) so they are unit-tested without the store or a window.
-The restored surface is window bounds and display, the resizable panel layout (via a `react-resizable-panels` `LayoutStorage` adapter over the session), per-stream volume/mute/pan, the video layout, every pop-out, and the FR24 last URL.
+The restored surface is window bounds and display, the panel layout (the split tree, maximize state, per-feed fit/fill, and any named layout profiles — see § Panel layout system below), per-stream volume/mute/pan, the video layout, every pop-out, and the FR24 last URL.
 
 Per-stream volume, mute, and pan are session-restored, but priority is deliberately NOT (decision 2026-07-19): `config.json` is priority's live tuning surface, so it is re-derived from config on every launch rather than pinned in the session, where a stale value would silently override an edited config.
 
@@ -81,6 +81,29 @@ This is what makes the Phase 4 exit criterion hold: a pop-out saved on a second 
 Pop-outs are grid-only windows that load the SAME renderer bundle at `?window=popout&id=N` (decision 2026-07-19); the preload reads that query to mount a video-only view (no ATC engine, no FR24 view) for a subset of feeds.
 The main process owns every pop-out `BrowserWindow` and its session slice — bounds/display, feeds, layout, per-feed volumes — with bounds tracked main-side and layout/volumes persisted by the pop-out renderer through the `windows:*` channels.
 Opening a pop-out hands its feeds off the main grid (a broadcast of the open set drives the hide/return in every window) and closing it returns them; quitting the app preserves the pop-out slices for next-launch restore, while a user closing one pop-out forgets it.
+
+## Panel layout system
+
+The main window's panel arrangement (see [../design/Layout.md](../design/Layout.md) for the operator-facing behavior this implements) is a small, in-house piece of machinery rather than a layout library, built and landed across a dedicated six-PR sequence (`feature/panel-layout-core` through `feature/panel-drag-dock`).
+
+- **A serializable split tree, not an opaque layout string.**
+  The arrangement is a plain data structure — splits with an orientation and percentage sizes, leaves naming a panel id (`src/shared/panelLayout.ts`) — stored as `session.panelLayout` (decision 2026-07-19) and shared verbatim between the live store and the persisted session, so there is nothing to serialize/deserialize beyond ordinary JSON.
+  A never-throw sanitizer degrades any hand-edited or corrupt tree to the built-in default rather than blocking a relaunch.
+- **One single-container canvas render, not nested layout components.**
+  A pure function maps the tree plus the container's pixel size onto a flat list of leaf rectangles and splitter segments (a guillotine partition — every leaf and splitter tiles the container exactly, no gaps or overlaps).
+  Every open panel renders as an absolutely-positioned sibling inside ONE container, always in a fixed order sorted by panel id — never by tree position — so rearranging, snapping to a different template, or maximizing a panel is purely a restyle: React never reorders or reparents the panel DOM, which is what lets a video feed's embedded player survive every one of those operations without reloading (decision 2026-07-19).
+- **Custom splitters.**
+  A small pointer-capture-driven divider component (pure clamp math, a per-panel-kind minimum pixel floor, `role="separator"` plus arrow-key resizing) replaces what a layout library's own divider would otherwise provide.
+- **Header drag-to-dock via pure hit-testing, not `elementFromPoint`.**
+  Dragging a panel by its header hit-tests the pointer position against the SAME computed leaf rectangles the canvas already renders from — never `elementFromPoint`, which a live YouTube iframe or the FR24 native view would simply swallow.
+  `setPointerCapture` on the canvas container makes this reliable even while the pointer is directly over one of those hosts (decision 2026-07-20; see [../decisions/README.md](../decisions/README.md)).
+  A native-menu "Move panel…" command and an accessible on-screen dialog reach the exact same move operation without a pointer gesture, and landed first as the dependency-free, e2e-deterministic fallback.
+- **Native menus, not DOM overlays, for anything that must sit above the map.**
+  The FR24 panel is the one `WebContentsView` in the app and paints above all DOM (see Known limitations below); anything that needs to present controls over that region — closing/reopening a panel, picking a saved layout — uses a native application menu (`src/main/menu.ts`) synced from the renderer over a small typed IPC pair, rather than an HTML overlay that the native view would simply paint over.
+- **Snap layouts: templates and named profiles, both just tree values.**
+  A small catalog of ready-made template shapes, and any number of the operator's own named, saved trees, are both stored and applied exactly like the live tree itself — switching between them is a single tree replacement, so a panel present in both the old and new arrangement never remounts.
+
+This replaced `react-resizable-panels` (decision 2026-07-20; the dependency is fully removed from `package.json`): that library's Group component is uncontrolled with its own in-lifetime layout cache, which fights a tree that needs to be replaced wholesale on every template/profile switch and reopen — see the exploration notes in the panel-system planning doc for the specific mechanisms that motivated building this in-house instead. Pop-outs never used it (they keep a plain CSS grid) and are unaffected by its removal.
 
 ## Versioning and releases
 
