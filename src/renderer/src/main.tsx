@@ -8,6 +8,7 @@ import {
   startPanelLayoutPersistence,
   startPopoutFeedTracking
 } from './state/sessionBootstrap'
+import { startMenuBridge } from './layout/menuBridge'
 // Bundled woff2 @font-face declarations (Barlow Semi Condensed + Inter),
 // committed as binaries — no CDN, so the app stays usable offline at the
 // airfield (decision 2026-07-19; see docs/WYVERN-RESKIN-PLAN.md Step 2 and
@@ -47,6 +48,10 @@ async function bootstrap(): Promise<void> {
     hydratePanelLayout()
     startPanelLayoutPersistence()
     startPopoutFeedTracking()
+    // The native Panels/Layout menu round trip (PR4 of the panel-system
+    // effort) — last, so its initial sync already reflects the hydrated tree
+    // and the pop-out claim set above, not the pre-hydration placeholder.
+    startMenuBridge()
   }
 
   createRoot(container).render(<StrictMode>{isPopout ? <PopoutApp /> : <App />}</StrictMode>)
