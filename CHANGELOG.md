@@ -15,6 +15,34 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Modular panel layout: ATC audio, field weather, flight tracking, and every
+  video feed are now independent, freely-arrangeable panels instead of three
+  fixed columns. Panels split, resize, close, and reopen; a panel's header can
+  be dragged onto another panel to swap them or dock alongside an edge, with a
+  live drop-zone preview during the drag, or moved through an accessible
+  "Move panel…" dialog and the native Panels menu.
+- Snap layouts: a small gallery of ready-made templates (an even grid, one
+  large pane plus several smaller ones, and more) plus any number of the
+  operator's own named, saved layouts — save, rename, delete, and switch
+  between them from a Layout Manager dialog or native menu hotkeys. Switching
+  never restarts a video feed present in both the old and new arrangement.
+- Per-video fit/fill toggle: each video panel independently shows its feed
+  either fully inscribed (may letterbox) or filling the whole panel (may
+  crop), remembered per feed.
+- Maximize any panel to fill the window and restore it again; every other
+  panel keeps running underneath (a video feed keeps playing, an unmuted ATC
+  stream stays audible even while its panel is out of view).
+- The whole panel arrangement — layout, maximize state, per-feed fit/fill, and
+  named saved layouts — is part of full session restore.
+
+### Changed
+
+- The panel layout is now built in-house (a serializable split tree rendered
+  by a single canvas, with custom splitters) instead of on the
+  `react-resizable-panels` library, which has been removed as a dependency.
+
 ## [0.1.0] - 2026-07-19
 
 Personal-use alpha for EAA AirVenture 2026 and a validation of the release

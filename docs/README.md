@@ -21,6 +21,7 @@ If a sentence in `design/` names a language, library, or tool beyond a brief par
 | [design/Video.md](design/Video.md) | Live webcam grid, layouts, pop-outs | Video behavior |
 | [design/Tracking.md](design/Tracking.md) | Embedded flight-tracking panel | Tracking behavior |
 | [design/Weather.md](design/Weather.md) | Field-weather card: current conditions, forecast, flight category | Weather behavior |
+| [design/Layout.md](design/Layout.md) | Panel tiling, splits, drag docking, maximize, snap templates + named layouts | Main-window layout behavior |
 | [design/assets/](https://github.com/ericwait/airshow-traffic-monitor/tree/main/docs/design/assets) | Prototype screenshots (the baseline this app replaces) | — |
 | [development/TechStack.md](development/TechStack.md) | Stack, rationale, limitations, alternatives | Tool choices |
 | [Implementation-Plan.md](Implementation-Plan.md) | Forward work only: phases, dependency graph, backlog, progress log | What happens next |

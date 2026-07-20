@@ -125,6 +125,8 @@ Retires the old hand-edit-config-and-restart workflow.
 
 **Estimated effort.** ~3–4 days across 6 PRs. Solo dev + AI agents.
 
+**Status.** Implemented across all 6 PRs — `feature/panel-layout-core` (#33), `feature/panel-canvas-shell` (#34), `feature/panel-video-polish` (#35, the maximize/fit-toggle slice), `feature/panel-menu-move` (#37), `feature/layout-snaps` (#38), and `feature/panel-drag-dock` (this PR — header drag-to-dock, `react-resizable-panels` fully removed) — merged to `develop`.
+
 **Dominant risk.** A later change violating the id-sorted DOM-order invariant reloads every stream (medium likelihood, high impact);
 mitigated by a loud render-site comment, a render-order guardian test, and the `isConnected` e2e proxy.
 
@@ -166,6 +168,8 @@ The v0.1.0 release is complete when:
 
 <!-- Append-only, reverse-chronological (newest at top). One terse line per
      completion — no adjectives, no narrative. -->
+
+- **2026-07-20** — Phase 8 (panel system) shipped end to end across 6 PRs: serializable split-tree canvas replacing the hard-coded three-pillar layout and `react-resizable-panels` (#33, #34), maximize + per-feed fit/fill (#35), close/reopen + Move-panel modal + native Layout/Panels menus (#37), snap templates + named layout profiles (#38), and header drag-to-dock (this PR, `feature/panel-drag-dock`) — the final PR also removes the now-unused `react-resizable-panels` dependency outright.
 
 - **2026-07-19** — Phase 6 icon/mark slice shipped: Wyvern Watch packaged (`.icns` + PNG masters) and runtime window icons, renderer favicon set, in-app mark in header + About (PR #25).
 - **2026-07-19** — On-demand ATC connections shipped: status-pill connect/disconnect, calm feed-down back-off, persisted connected set (PR #23).
