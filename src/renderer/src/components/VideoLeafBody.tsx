@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import type { FeedAudioState } from '@shared/ipc'
 import type { PanelId } from '@shared/panelLayout'
 import { computeAspectRect } from '@shared/videoGeometry'
 import { useLayoutController } from '../layout/LayoutController'
@@ -19,14 +20,31 @@ import { defaultFeeds } from '../youtube/defaultFeeds'
 //
 // Reads/writes layout state ONLY through `useLayoutController()`, never
 // `useAppStore` directly, so this exact component (fit/fill stage math
-// included) is what a pop-out window reuses for its own video tiles in the
-// next PR, against its own controller instead of the main window's store.
+// included) is also what a pop-out window's canvas renders for every one of
+// its own video leaves (PopoutApp.tsx's `renderPopoutLeafBody`), against its
+// own `usePopoutLayout` controller instead of the main window's store.
 
 export interface VideoLeafBodyProps {
   panelId: PanelId
+  /**
+   * Present ONLY inside a pop-out window (decision 2026-07-20; see
+   * docs/design/Layout.md's pop-out section). Pop-outs, unlike the main
+   * window, persist a per-feed volume/mute state (`PopoutState.volumes`), so
+   * this wires that through to `VideoTile`'s own mute/volume controls; the
+   * main window's tiles pass no audio props at all (unchanged behavior).
+   * Its presence also hides the header "pop out again" button (a pop-out's
+   * feed is already in its own window) and the "Move panel…" button (a
+   * pop-out's reorg path is header-drag-to-dock on its own canvas, not the
+   * Move-panel modal — main-window-only by decision).
+   */
+  popout?: {
+    initialVolume?: number
+    initialMuted?: boolean
+    onAudioChange: (state: FeedAudioState) => void
+  }
 }
 
-function VideoLeafBody({ panelId }: VideoLeafBodyProps): React.JSX.Element {
+function VideoLeafBody({ panelId, popout }: VideoLeafBodyProps): React.JSX.Element {
   const feedId = videoFeedIdOf(panelId)
   const feed = defaultFeeds.find((f) => f.id === feedId)
   const title = panelTitle(panelId)
@@ -54,6 +72,9 @@ function VideoLeafBody({ panelId }: VideoLeafBodyProps): React.JSX.Element {
 
   const stageRect = computeAspectRect(slotSize, fitMode)
 
+  // Pop-out-only — a video panel already inside a pop-out never opens a
+  // SECOND pop-out for itself (see this component's `popout` prop doc
+  // comment), so this handler/button only exists for the main window.
   const popOut = (): void => {
     void window.api.windows.openPopout({
       feedIds: [feedId],
@@ -72,7 +93,8 @@ function VideoLeafBody({ panelId }: VideoLeafBodyProps): React.JSX.Element {
         <PanelChromeButtons
           panelId={panelId}
           title={title}
-          onPopOut={popOut}
+          onPopOut={popout ? undefined : popOut}
+          hideMove={popout !== undefined}
           fit={{
             mode: fitMode,
             onToggle: () => controller.setVideoFit(feedId, fitMode === 'fit' ? 'fill' : 'fit')
@@ -91,7 +113,13 @@ function VideoLeafBody({ panelId }: VideoLeafBodyProps): React.JSX.Element {
               height: stageRect.height
             }}
           >
-            <VideoTile feed={feed} fitMode={fitMode} />
+            <VideoTile
+              feed={feed}
+              fitMode={fitMode}
+              initialVolume={popout?.initialVolume}
+              initialMuted={popout?.initialMuted}
+              onAudioChange={popout?.onAudioChange}
+            />
           </div>
         )}
       </div>

@@ -932,7 +932,15 @@ export function sanitizeLayoutTree(raw: unknown): LayoutNode | null {
   return normalizeTree(shaped)
 }
 
-function sanitizeVideoFitRecord(value: unknown): Record<string, VideoFitMode> {
+/**
+ * Sanitize a raw per-feed fit/fill record: non-object input is an empty
+ * record; each entry is kept only if its value is exactly `'fit'`/`'fill'`,
+ * malformed entries dropped individually. Exported (decision 2026-07-20) so
+ * `src/shared/session.ts`'s pop-out sanitizer (`PopoutState.videoFit`, the
+ * pop-out's own per-window fit/fill state — see docs/design/Layout.md) reuses
+ * this instead of duplicating it.
+ */
+export function sanitizeVideoFitRecord(value: unknown): Record<string, VideoFitMode> {
   const out: Record<string, VideoFitMode> = {}
   if (!isPlainObject(value)) return out
   for (const [feedId, mode] of Object.entries(value)) {

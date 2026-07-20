@@ -13,7 +13,7 @@
 
 import type { AppConfig, StreamConfig } from './defaultConfig'
 import type { LiveAtcFeed } from './liveatcDirectory'
-import type { PanelId, PanelLayoutSession } from './panelLayout'
+import type { LayoutNode, PanelId, PanelLayoutSession, VideoFitMode } from './panelLayout'
 import type { WeatherMetar, WeatherTaf } from './weather'
 
 // ---------------------------------------------------------------------------
@@ -172,7 +172,16 @@ export interface WindowBoundsState {
   displayId: number | null
 }
 
-/** The video grid's cross-tile layout — the shared decisions VideoGrid reacts to. */
+/**
+ * The old video grid's cross-tile layout (uniform/emphasized/fill-panel).
+ * Retired everywhere the layout itself is concerned (decision 2026-07-20:
+ * both the main window and pop-outs now use the panel canvas's maximize +
+ * per-feed fit/fill instead — see `PopoutState.tree`/`videoFit`) — kept only
+ * because `OpenPopoutRequest.layout` still carries this shape for a NEW
+ * pop-out's launch request; `PopoutManager.openPopout` (`src/main/popouts.ts`)
+ * no longer reads it (the initial tree comes from `buildBalancedGrid` over
+ * the request's `feedIds` instead).
+ */
 export interface VideoLayoutState {
   mode: 'uniform' | 'emphasized'
   /** Feed id in the emphasized "big" tile; null in uniform mode. */
@@ -187,14 +196,41 @@ export interface FeedAudioState {
   muted: boolean
 }
 
-/** One pop-out window's persisted slice — its own bounds/display, feeds, layout, volumes. */
+/**
+ * One pop-out window's persisted slice — its own bounds/display, feeds,
+ * panel-canvas layout, volumes.
+ *
+ * (decision 2026-07-20) A pop-out renders the SAME panel canvas the main
+ * window uses (`tree` is a `LayoutNode` of `video:` leaves only — see
+ * `src/shared/panelLayout.ts`), rearrangeable by the operator exactly like
+ * the main window's panels: split, resize, drag-to-dock, maximize, and
+ * per-feed fit/fill. This retires the old `video: VideoLayoutState`
+ * uniform/emphasized/fill-panel grid for pop-outs (the main window retired
+ * the same modes a phase earlier — see docs/decisions/README.md), in favor
+ * of maximize + `videoFit`; the Layout Manager and named profiles stay
+ * main-window-only. See docs/design/Layout.md's pop-out section.
+ */
 export interface PopoutState {
   /** Stable per-session id; also the `?id=` the pop-out renderer loads under. */
   id: number
   bounds: WindowBoundsState
   /** The feeds this pop-out manages (handed off from the main grid while open). */
   feedIds: string[]
-  video: VideoLayoutState
+  /**
+   * This pop-out's own panel-canvas split tree, rendered by the SAME
+   * `PanelCanvas`/`LeafFrame` the main window uses (via a local-state
+   * `LayoutController` — see `renderer/src/layout/usePopoutLayout.ts`), not
+   * the global store. `null` only when `feedIds` is empty (a tree needs at
+   * least one leaf) — the pop-out renderer shows its existing "no feeds
+   * assigned" message instead of mounting the canvas. A missing/corrupt tree
+   * is never fatal: the never-throw sanitizer (`sanitizePopout`, `@shared/
+   * session`) rebuilds a fresh balanced grid from `feedIds` via
+   * `buildBalancedGrid` (mirrors `sanitizePanelLayoutSession`'s own
+   * drop-and-default contract for the main window).
+   */
+  tree: LayoutNode | null
+  /** Per-feed fit/fill mode for THIS pop-out's tiles, keyed by bare feed id (not the `video:` panel id). Absent = 'fit'. */
+  videoFit: Record<string, VideoFitMode>
   /** Per-feed audio for this pop-out's tiles, keyed by feed id. */
   volumes: Record<string, FeedAudioState>
 }
@@ -275,9 +311,15 @@ export interface OpenPopoutRequest {
   bounds?: WindowBoundsState
 }
 
-/** A pop-out renderer's persist patch for its own slice. */
+/**
+ * A pop-out renderer's persist patch for its own slice — `tree`/`videoFit`
+ * are each a whole-section replace (like `SessionPatch.panelLayout`), pushed
+ * by `usePopoutLayout` on every structural/fit change; `feedIds` replaces
+ * the whole array (a leaf close/reopen); `volumes` merges per feed id.
+ */
 export interface PopoutPatch {
-  video?: VideoLayoutState
+  tree?: LayoutNode | null
+  videoFit?: Record<string, VideoFitMode>
   volumes?: Record<string, FeedAudioState>
   feedIds?: string[]
 }

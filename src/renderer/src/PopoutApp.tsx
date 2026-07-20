@@ -1,19 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FeedAudioState, PopoutSummary, VideoLayoutState } from '@shared/ipc'
+import type { FeedAudioState, PopoutSummary } from '@shared/ipc'
 import { popoutSummaries } from '@shared/session'
+import type { PanelId } from '@shared/panelLayout'
+import { LayoutControllerProvider } from './layout/LayoutController'
+import PanelCanvas from './layout/PanelCanvas'
+import { videoFeedIdOf } from './layout/panelMeta'
+import { usePopoutLayout } from './layout/usePopoutLayout'
+import VideoLeafBody from './components/VideoLeafBody'
 import { defaultFeeds } from './youtube/defaultFeeds'
-import { computeVideoLayout } from './youtube/layout'
-import VideoTile from './components/VideoTile'
 import { currentPopoutSlice, sessionSnapshot } from './state/sessionBootstrap'
 
-// The pop-out window's renderer — the SAME bundle as the main window, rendered
-// grid-only (no ATC, no FR24) when the launch URL is `?window=popout&id=N`. It
-// manages a subset of feeds handed off from the main grid, with its own layout
-// and per-feed volumes, persisted back into its session slice through the
-// windows:patchPopout channel so the whole arrangement survives a relaunch.
-//
-// Its layout state is LOCAL (not the main store's video slice) so a pop-out and
-// the main window never share an emphasis/fill decision.
+// The pop-out window's renderer — the SAME bundle as the main window, mounted
+// when the launch URL is `?window=popout&id=N`. It manages a subset of feeds
+// handed off from the main grid, on the SAME panel canvas the main window
+// uses (decision 2026-07-20; see docs/design/Layout.md's pop-out section) —
+// split, resize, drag-to-dock, maximize, and per-feed fit/fill all work
+// exactly as they do in the main window, scoped to this window's own feeds.
+// `usePopoutLayout` is this window's LayoutController, backed by LOCAL React
+// state (not the main window's zustand store) so a pop-out and the main
+// window never share an arrangement; its tree/videoFit persist back into
+// this pop-out's own PopoutState slice through the windows:patchPopout
+// channel so the whole arrangement survives a relaunch. The Layout Manager
+// and named profiles stay main-window-only; a pop-out's reorg path is
+// header-drag-to-dock on this canvas (or the native Panels/Move-panel
+// affordances, which don't apply here since pop-outs have no menu of their
+// own beyond the OS default).
 
 const { popoutId } = window.api.windows
 
@@ -109,76 +120,44 @@ function MergeIntoControl({ thisId }: { thisId: number }): React.JSX.Element {
 
 function PopoutApp(): React.JSX.Element {
   const slice = useMemo(() => currentPopoutSlice(), [])
+  const { controller, volumes, setFeedAudio } = usePopoutLayout(popoutId, slice)
 
-  // Feeds in the stable default order, filtered to this pop-out's set.
-  const feeds = useMemo(() => {
-    const ids = new Set(slice?.feedIds ?? [])
-    return defaultFeeds.filter((f) => ids.has(f.id))
-  }, [slice])
-
-  const [video, setVideo] = useState<VideoLayoutState>(
-    () => slice?.video ?? { mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null }
-  )
-  const [volumes, setVolumes] = useState<Record<string, FeedAudioState>>(() => slice?.volumes ?? {})
-
-  // Each handler persists its change into this pop-out's slice (debounced main-side).
-  const toggleEmphasize = useCallback((feedId: string): void => {
-    setVideo((prev) => {
-      const already = prev.mode === 'emphasized' && prev.emphasizedFeedId === feedId
-      const next: VideoLayoutState = {
-        ...prev,
-        mode: already ? 'uniform' : 'emphasized',
-        emphasizedFeedId: already ? null : feedId
-      }
-      if (popoutId !== null) window.api.windows.patchPopout(popoutId, { video: next })
-      return next
-    })
-  }, [])
-
-  const setFill = useCallback((feedId: string | null): void => {
-    setVideo((prev) => {
-      const next: VideoLayoutState = { ...prev, fillPanelFeedId: feedId }
-      if (popoutId !== null) window.api.windows.patchPopout(popoutId, { video: next })
-      return next
-    })
-  }, [])
-
-  const handleAudioChange = useCallback((feedId: string, state: FeedAudioState): void => {
-    setVolumes((prev) => ({ ...prev, [feedId]: state }))
-    if (popoutId !== null)
-      window.api.windows.patchPopout(popoutId, { volumes: { [feedId]: state } })
-  }, [])
-
-  const emphasizedIndex = useMemo(() => {
-    if (video.mode !== 'emphasized' || video.emphasizedFeedId == null) return null
-    const idx = feeds.findIndex((f) => f.id === video.emphasizedFeedId)
-    return idx === -1 ? null : idx
-  }, [feeds, video])
-
-  const layout = useMemo(
-    () => computeVideoLayout(feeds.length, emphasizedIndex),
-    [feeds.length, emphasizedIndex]
-  )
-
-  const fillFeed =
-    video.fillPanelFeedId != null ? feeds.find((f) => f.id === video.fillPanelFeedId) : undefined
-
-  // Escape exits fill-panel mode (matches the main grid).
+  // Escape restores a maximized panel — mirrors LayoutShell's main-window rule.
   useEffect(() => {
-    if (!fillFeed) return
+    if (controller === null || controller.maximizedPanelId === null) return
+    const maximizedId = controller.maximizedPanelId
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setFill(null)
+      if (e.key === 'Escape') controller.toggleMaximize(maximizedId)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [fillFeed, setFill])
+  }, [controller])
 
-  const audioFor = (feedId: string): FeedAudioState =>
-    volumes[feedId] ?? { volume: 100, muted: true }
+  // Every leaf in a pop-out's tree is a `video:` leaf (pop-outs have only
+  // video panels) — wires this pop-out's own per-feed audio state through to
+  // VideoLeafBody's `popout` prop (see that component's doc comment for why
+  // this differs from the main window, which passes no audio props at all).
+  const renderLeafBody = useCallback(
+    (panelId: PanelId): React.ReactNode => {
+      const feedId = videoFeedIdOf(panelId)
+      const audio = volumes[feedId] ?? { volume: 100, muted: true }
+      return (
+        <VideoLeafBody
+          panelId={panelId}
+          popout={{
+            initialVolume: audio.volume,
+            initialMuted: audio.muted,
+            onAudioChange: (state: FeedAudioState) => setFeedAudio(feedId, state)
+          }}
+        />
+      )
+    },
+    [volumes, setFeedAudio]
+  )
 
-  if (feeds.length === 0) {
-    // Defensive: the slice was missing or empty (a hand-edited session, or the
-    // feeds rotated out). Say so rather than showing a blank window.
+  if (controller === null) {
+    // Defensive: the slice was missing or empty (a hand-edited session, or
+    // every feed rotated out). Say so rather than showing a blank window.
     return (
       <div className="popout-shell popout-empty" data-testid="popout-empty">
         {popoutId !== null && <MergeIntoControl thisId={popoutId} />}
@@ -187,61 +166,13 @@ function PopoutApp(): React.JSX.Element {
     )
   }
 
-  if (fillFeed) {
-    const audio = audioFor(fillFeed.id)
-    return (
-      <div className="popout-shell">
-        <div
-          className="video-grid video-grid--fill"
-          data-testid="popout-grid"
-          data-layout-mode="fill"
-        >
-          <VideoTile
-            key={fillFeed.id}
-            feed={fillFeed}
-            emphasized
-            filled
-            initialVolume={audio.volume}
-            initialMuted={audio.muted}
-            onAudioChange={(s) => handleAudioChange(fillFeed.id, s)}
-            onToggleEmphasize={() => setFill(null)}
-            onFillPanel={() => setFill(null)}
-          />
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="popout-shell">
       {popoutId !== null && <MergeIntoControl thisId={popoutId} />}
-      <div
-        className={`video-grid video-grid--${video.mode}`}
-        data-testid="popout-grid"
-        data-layout-mode={video.mode}
-        style={{
-          gridTemplateColumns: layout.gridTemplateColumns,
-          gridTemplateRows: layout.gridTemplateRows,
-          gridTemplateAreas: layout.gridTemplateAreas
-        }}
-      >
-        {feeds.map((feed, index) => {
-          const audio = audioFor(feed.id)
-          return (
-            <VideoTile
-              key={feed.id}
-              feed={feed}
-              area={layout.tileArea(index)}
-              emphasized={video.mode === 'emphasized' && index === emphasizedIndex}
-              filled={false}
-              initialVolume={audio.volume}
-              initialMuted={audio.muted}
-              onAudioChange={(s) => handleAudioChange(feed.id, s)}
-              onToggleEmphasize={() => toggleEmphasize(feed.id)}
-              onFillPanel={() => setFill(feed.id)}
-            />
-          )
-        })}
+      <div className="popout-canvas-wrap" data-testid="popout-canvas">
+        <LayoutControllerProvider value={controller}>
+          <PanelCanvas renderLeafBody={renderLeafBody} />
+        </LayoutControllerProvider>
       </div>
     </div>
   )

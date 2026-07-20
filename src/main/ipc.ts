@@ -15,6 +15,7 @@ import type {
   WindowBoundsState
 } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
+import { sanitizeLayoutTree, sanitizeVideoFitRecord } from '@shared/panelLayout'
 import type { Fr24Controller } from './fr24'
 import type { LayoutMenuController } from './menu'
 import type { PopoutManager } from './popouts'
@@ -130,14 +131,26 @@ function narrowLayoutMenuSync(value: unknown): LayoutMenuSyncPayload | null {
   return { panels, maximizedPanelId, profiles, activeProfileName }
 }
 
-/** Narrow a pop-out renderer's persist patch to the fields it is allowed to set. */
+/**
+ * Narrow a pop-out renderer's persist patch to the fields it is allowed to
+ * set. `tree` reuses the never-throw `sanitizeLayoutTree`/`videoFit` reuses
+ * `sanitizeVideoFitRecord` (both `@shared/panelLayout`) rather than rejecting
+ * the whole patch on a malformed shape — self-healing to a null/empty value
+ * is safer than dropping a legitimate patch that also carries `feedIds`.
+ * `null` for `tree` itself (this pop-out's feeds dropped to zero) is a valid,
+ * intentional value, distinct from "absent" — narrowed by an explicit
+ * `=== null` check before falling through to the sanitizer.
+ */
 function narrowPopoutPatch(value: unknown): PopoutPatch | null {
   if (typeof value !== 'object' || value === null) return null
   const v = value as Record<string, unknown>
   const patch: PopoutPatch = {}
-  if (v.video !== undefined) {
-    if (!isVideoLayout(v.video)) return null
-    patch.video = v.video
+  if (v.tree !== undefined) {
+    patch.tree = v.tree === null ? null : sanitizeLayoutTree(v.tree)
+  }
+  if (v.videoFit !== undefined) {
+    if (typeof v.videoFit !== 'object' || v.videoFit === null) return null
+    patch.videoFit = sanitizeVideoFitRecord(v.videoFit)
   }
   if (v.volumes !== undefined) {
     if (typeof v.volumes !== 'object' || v.volumes === null) return null

@@ -86,8 +86,12 @@ test('the fit toggle defaults every tile to fit mode', async () => {
   }
 })
 
-test('the main window has no emphasize/fill controls — those are pop-out-grid-only', async () => {
-  // Superseded by per-panel maximize (decision 2026-07-19); see panels.spec.ts.
+test('there are no emphasize/fill controls anywhere — retired in favor of per-panel maximize + fit/fill everywhere', async () => {
+  // Retired for the main window in decision 2026-07-19, and for pop-outs too
+  // in decision 2026-07-20 (see docs/decisions/README.md and
+  // docs/design/Layout.md's pop-out section) — VideoTile has no emphasize/
+  // fill concept left at all now; see panels.spec.ts (main window maximize)
+  // and popout.spec.ts (pop-out maximize).
   await expect(page.locator('.video-tile-emphasize-btn')).toHaveCount(0)
   await expect(page.locator('.video-tile-fill-btn')).toHaveCount(0)
 })
