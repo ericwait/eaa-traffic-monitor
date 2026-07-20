@@ -7,9 +7,10 @@ import { IpcChannels } from '@shared/ipc'
 // paints above all DOM (CLAUDE.md gotcha). Two menus land in PR4:
 //   - Panels: a checkbox per panel id (audio, weather, fr24, each `video:`
 //     feed), toggling it open/closed in the renderer's canvas.
-//   - Layout: "Reset to Default Layout" for now; the snap-manager launcher and
-//     named-profile radios (`feature/layout-snaps`) extend this menu later —
-//     see the placeholder comment below.
+//   - Layout: "Reset to Default Layout", plus (PR5, `feature/layout-snaps`) a
+//     "Layout Manager…" launcher for LayoutManagerModal (the template gallery
+//     + named-profile CRUD dialog) and one radio item per saved profile, the
+//     first nine carrying `CmdOrCtrl+Alt+1..9` accelerators.
 //
 // (decision 2026-07-20) Native menus + a DOM Move-panel modal are the
 // FR24-safe/accessible move paths landed now; custom pointer-driven
@@ -21,6 +22,25 @@ import { IpcChannels } from '@shared/ipc'
 // state of its own — the renderer is the single source of truth and pushes a
 // fresh sync on every relevant store change (see
 // src/renderer/src/layout/menuBridge.ts).
+
+/** How many saved profiles get a `CmdOrCtrl+Alt+N` accelerator — Electron/OS menu accelerators only have single digits to spare, and the plan caps it at 1..9 (docs/Panel-System-Plan.md § File inventory). Any profile beyond this still gets its own (unaccelerated) radio item. */
+const ACCELERATED_PROFILE_COUNT = 9
+
+/** One profile's `CmdOrCtrl+Alt+N` radio item (index 0-based; N = index + 1), or a plain radio with no accelerator past the ninth. */
+function profileMenuItem(
+  name: string,
+  index: number,
+  activeProfileName: string | null,
+  sendCommand: (command: LayoutCommand) => void
+): MenuItemConstructorOptions {
+  return {
+    label: name,
+    type: 'radio',
+    checked: name === activeProfileName,
+    ...(index < ACCELERATED_PROFILE_COUNT ? { accelerator: `CmdOrCtrl+Alt+${index + 1}` } : {}),
+    click: () => sendCommand({ type: 'apply-profile', index })
+  }
+}
 
 /** Build the whole application menu from the latest renderer-pushed sync (or `null` before the first one lands). */
 export function buildApplicationMenu(
@@ -37,6 +57,16 @@ export function buildApplicationMenu(
         }))
       : [{ label: 'No panels yet', enabled: false }]
 
+  const profileItems: MenuItemConstructorOptions[] =
+    sync && sync.profiles.length > 0
+      ? [
+          { type: 'separator' },
+          ...sync.profiles.map((name, index) =>
+            profileMenuItem(name, index, sync.activeProfileName, sendCommand)
+          )
+        ]
+      : []
+
   const template: MenuItemConstructorOptions[] = [
     // macOS conventionally leads with the app-identity menu (About/Quit/etc.);
     // omitting it on other platforms matches the existing autoHideMenuBar UX.
@@ -49,11 +79,13 @@ export function buildApplicationMenu(
         {
           label: 'Reset to Default Layout',
           click: () => sendCommand({ type: 'reset-layout' })
-        }
-        // PR5 (`feature/layout-snaps`) adds: a "Manage Snaps…" launcher for
-        // LayoutManagerModal, a "Save Current as Profile…" item, and
-        // CmdOrCtrl+Alt+1..9 radio accelerators for saved profiles — this
-        // submenu is the intended landing spot; no manager logic here yet.
+        },
+        { type: 'separator' },
+        {
+          label: 'Layout Manager…',
+          click: () => sendCommand({ type: 'open-layout-manager' })
+        },
+        ...profileItems
       ]
     },
     { role: 'viewMenu' },

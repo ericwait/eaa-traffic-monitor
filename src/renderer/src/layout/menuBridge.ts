@@ -20,14 +20,19 @@ const FIXED_PANEL_IDS: readonly PanelId[] = ['audio', 'weather', 'fr24']
  * operator could toggle (the three fixed panels, plus each `defaultFeeds`
  * video feed not currently claimed by an open pop-out), each with its
  * open/closed state (whether its id is a leaf in the current tree) and a
- * human title (see layout/panelMeta.ts), plus the maximized panel (if any).
+ * human title (see layout/panelMeta.ts), plus the maximized panel (if any)
+ * and, since PR5 of the panel-system effort, the saved-profile names (in
+ * `layoutProfiles` order — this order is what the menu's `CmdOrCtrl+Alt+1..9`
+ * radios count against) and which one currently matches the canvas, if any.
  * Pure — no Electron/DOM/store reads — so it is directly vitest-importable
  * (tests/unit/menuBridge.test.ts is its guardian).
  */
 export function buildMenuSyncPayload(
   openLeafIds: readonly PanelId[],
   maximizedPanelId: PanelId | null,
-  excludedFeedIds: ReadonlySet<string> = new Set()
+  excludedFeedIds: ReadonlySet<string> = new Set(),
+  profileNames: readonly string[] = [],
+  activeProfileName: string | null = null
 ): LayoutMenuSyncPayload {
   const openSet = new Set(openLeafIds)
   const videoIds: PanelId[] = defaultFeeds
@@ -41,7 +46,7 @@ export function buildMenuSyncPayload(
     open: openSet.has(id)
   }))
 
-  return { panels, maximizedPanelId }
+  return { panels, maximizedPanelId, profiles: [...profileNames], activeProfileName }
 }
 
 /** Push one fresh sync from the store's current state. */
@@ -50,7 +55,9 @@ function pushSync(): void {
   const payload = buildMenuSyncPayload(
     collectLeafIds(state.panelTree),
     state.maximizedPanelId,
-    new Set(state.poppedOutFeedIds)
+    new Set(state.poppedOutFeedIds),
+    state.layoutProfiles.map((p) => p.name),
+    state.activeProfileName
   )
   window.api.layout.syncMenu(payload)
 }
@@ -59,30 +66,46 @@ function pushSync(): void {
 function applyCommand(command: LayoutCommand): void {
   const state = useAppStore.getState()
 
-  if (command.type === 'toggle-panel') {
-    const isOpen = collectLeafIds(state.panelTree).includes(command.id)
-    if (isOpen) state.closePanel(command.id)
-    else state.openPanel({ type: 'leaf', id: command.id })
-    return
-  }
+  switch (command.type) {
+    case 'toggle-panel': {
+      const isOpen = collectLeafIds(state.panelTree).includes(command.id)
+      if (isOpen) state.closePanel(command.id)
+      else state.openPanel({ type: 'leaf', id: command.id })
+      return
+    }
 
-  // 'reset-layout': rebuild the first-run tree over whatever feeds this
-  // window currently owns (excluding any popped out), and clear a stale
-  // maximize — `toggleMaximize` on the CURRENTLY maximized id clears it
-  // (maximizing an already-maximized id restores; see store.ts), so this
-  // never needs to know or guess which panel to un-maximize.
-  const excluded = new Set(state.poppedOutFeedIds)
-  const feedIds = defaultFeeds.map((f) => f.id).filter((id) => !excluded.has(id))
-  state.applyTree(buildDefaultTree(feedIds))
-  if (state.maximizedPanelId !== null) state.toggleMaximize(state.maximizedPanelId)
+    case 'reset-layout': {
+      // Rebuild the first-run tree over whatever feeds this window currently
+      // owns (excluding any popped out), and clear a stale maximize —
+      // `toggleMaximize` on the CURRENTLY maximized id clears it (maximizing
+      // an already-maximized id restores; see store.ts), so this never needs
+      // to know or guess which panel to un-maximize.
+      const excluded = new Set(state.poppedOutFeedIds)
+      const feedIds = defaultFeeds.map((f) => f.id).filter((id) => !excluded.has(id))
+      state.applyTree(buildDefaultTree(feedIds))
+      if (state.maximizedPanelId !== null) state.toggleMaximize(state.maximizedPanelId)
+      return
+    }
+
+    case 'open-layout-manager': {
+      state.setOverlay('layout-manager')
+      return
+    }
+
+    case 'apply-profile': {
+      state.applyProfile(command.index)
+      return
+    }
+  }
 }
 
 /**
  * Wire the store <-> native menu round trip for the life of the window: an
- * initial sync, a fresh sync on every panelTree/maximize/pop-out-claim
- * change, and command handling for menu clicks. Call once from the app's
- * bootstrap (main.tsx). Returns an unsubscribe for symmetry with the rest of
- * the bootstrap wiring, though nothing tears this down during the app's life.
+ * initial sync, a fresh sync on every panelTree/maximize/pop-out-claim/
+ * profile-list/active-profile change, and command handling for menu clicks.
+ * Call once from the app's bootstrap (main.tsx). Returns an unsubscribe for
+ * symmetry with the rest of the bootstrap wiring, though nothing tears this
+ * down during the app's life.
  */
 export function startMenuBridge(): () => void {
   pushSync()
@@ -91,7 +114,9 @@ export function startMenuBridge(): () => void {
     if (
       state.panelTree === prevState.panelTree &&
       state.maximizedPanelId === prevState.maximizedPanelId &&
-      state.poppedOutFeedIds === prevState.poppedOutFeedIds
+      state.poppedOutFeedIds === prevState.poppedOutFeedIds &&
+      state.layoutProfiles === prevState.layoutProfiles &&
+      state.activeProfileName === prevState.activeProfileName
     ) {
       return
     }

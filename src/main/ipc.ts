@@ -115,7 +115,19 @@ function narrowLayoutMenuSync(value: unknown): LayoutMenuSyncPayload | null {
     v.maximizedPanelId === null || typeof v.maximizedPanelId === 'string'
       ? (v.maximizedPanelId as LayoutMenuSyncPayload['maximizedPanelId'])
       : null
-  return { panels, maximizedPanelId }
+  // PR5 (feature/layout-snaps): saved-profile names + which one is active,
+  // for the Layout menu's profile radio items (src/main/menu.ts). Malformed
+  // entries are dropped individually (non-string names are filtered out)
+  // rather than rejecting the whole sync — the panel checkboxes still matter
+  // even if the profile list is momentarily odd.
+  const profiles = Array.isArray(v.profiles)
+    ? v.profiles.filter((p): p is string => typeof p === 'string')
+    : []
+  const activeProfileName =
+    v.activeProfileName === null || typeof v.activeProfileName === 'string'
+      ? (v.activeProfileName as string | null)
+      : null
+  return { panels, maximizedPanelId, profiles, activeProfileName }
 }
 
 /** Narrow a pop-out renderer's persist patch to the fields it is allowed to set. */
