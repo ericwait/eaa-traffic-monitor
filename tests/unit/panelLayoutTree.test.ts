@@ -4,6 +4,7 @@ import {
   buildDefaultTree,
   collectLeafIds,
   insertPanelBalanced,
+  insertVideoLeafBottom,
   movePanel,
   normalizeTree,
   pruneVideoLeaves,
@@ -338,6 +339,80 @@ describe('insertPanelBalanced', () => {
     expect(joined.sizes).toEqual([25, 25, 25, 25])
     // The smaller, untouched group keeps its exact reference.
     expect(result.children[0]).toBe(smallGroup)
+  })
+})
+
+describe('insertVideoLeafBottom', () => {
+  // Mirrors docs/Panel-System-Plan.md's default tree shape: an audio/weather
+  // left column, fr24 + a video grid on the right.
+  function sampleTree(videoNode: LayoutNode): LayoutSplit {
+    return split(
+      'default-root',
+      'horizontal',
+      [
+        split('default-audio-weather', 'vertical', [leaf('audio'), leaf('weather')], [70, 30]),
+        split('default-right', 'vertical', [leaf('fr24'), videoNode], [62, 38])
+      ],
+      [22, 78]
+    )
+  }
+
+  it('a null tree becomes just the new leaf', () => {
+    expect(insertVideoLeafBottom(null, leaf('video:a'))).toEqual(leaf('video:a'))
+  })
+
+  it('an id already present is a no-op (same reference)', () => {
+    const tree = sampleTree(leaf('video:a'))
+    expect(insertVideoLeafBottom(tree, leaf('video:a'))).toBe(tree)
+  })
+
+  it("the bug this replaces: a single remaining video feed is a bare leaf (not a split), so insertPanelBalanced's largest-all-leaf-group heuristic would join the audio/weather pair instead — insertVideoLeafBottom must never do that", () => {
+    const tree = sampleTree(leaf('video:a'))
+    // Confirm the premise: this is exactly the shape that fools insertPanelBalanced.
+    const wrongWay = insertPanelBalanced(tree, leaf('video:b')) as LayoutSplit
+    const wrongLeft = wrongWay.children[0] as LayoutSplit
+    expect(collectLeafIds(wrongLeft)).toEqual(['audio', 'weather', 'video:b']) // the bug
+
+    const result = insertVideoLeafBottom(tree, leaf('video:b')) as LayoutSplit
+    const left = result.children[0] as LayoutSplit
+    const right = result.children[1] as LayoutSplit
+    expect(collectLeafIds(left)).toEqual(['audio', 'weather']) // untouched
+    expect(collectLeafIds(right)).toEqual(['fr24', 'video:a', 'video:b'])
+    const videoRegion = right.children[1] as LayoutSplit
+    expect(collectLeafIds(videoRegion)).toEqual(['video:a', 'video:b'])
+  })
+
+  it('joins the existing video region and lands the new leaf in the bottom row, never the left column or paired with fr24 as a leaf', () => {
+    // 3 existing feeds (one row: ceil(sqrt(3)) = 2 rows, [2,1]) + a 4th
+    // returning feed makes 4 (2 rows of 2) — the new feed must land in the
+    // LAST row.
+    const videoGrid = buildBalancedGrid(['video:a', 'video:b', 'video:c'])!
+    const tree = sampleTree(videoGrid)
+    const result = insertVideoLeafBottom(tree, leaf('video:d')) as LayoutSplit
+
+    const left = result.children[0] as LayoutSplit
+    expect(collectLeafIds(left)).toEqual(['audio', 'weather']) // untouched left column
+
+    const right = result.children[1] as LayoutSplit
+    expect((right.children[0] as LayoutLeaf).id).toBe('fr24') // fr24 untouched, still on top
+
+    const newVideoRegion = right.children[1] as LayoutSplit
+    expect(newVideoRegion.orientation).toBe('vertical') // rows stacked
+    const rows = newVideoRegion.children as LayoutSplit[]
+    const bottomRow = rows[rows.length - 1]
+    expect(collectLeafIds(bottomRow)).toContain('video:d')
+    // Matches a from-scratch buildBalancedGrid over the same 4 feeds.
+    expect(
+      treesEqual(newVideoRegion, buildBalancedGrid(['video:a', 'video:b', 'video:c', 'video:d']))
+    ).toBe(true)
+  })
+
+  it('no existing video leaves: docks the new leaf as a new outermost bottom row rather than guessing a location', () => {
+    const tree = split('root', 'horizontal', [leaf('audio'), leaf('fr24')], [22, 78])
+    const result = insertVideoLeafBottom(tree, leaf('video:a')) as LayoutSplit
+    expect(result.orientation).toBe('vertical')
+    expect((result.children[1] as LayoutLeaf).id).toBe('video:a')
+    expect(result.children[0]).toBe(tree) // the whole prior tree is untouched, just relocated as the top sibling
   })
 })
 

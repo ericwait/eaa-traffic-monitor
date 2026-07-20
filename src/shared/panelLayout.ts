@@ -508,6 +508,117 @@ export function insertPanelBalanced(tree: LayoutNode | null, leaf: LayoutLeaf): 
   return replace(tree)
 }
 
+/** True when `node`'s ENTIRE leaf set is video leaves (and it has at least one) — a candidate video-grid region for `insertVideoLeafBottom`, whether that's a bare leaf, a single row, or a multi-row `buildBalancedGrid`-shaped split. */
+function isVideoOnlyRegion(node: LayoutNode, videoIds: ReadonlySet<PanelId>): boolean {
+  const ids = collectLeafIds(node)
+  return ids.length > 0 && ids.every((id) => videoIds.has(id))
+}
+
+/**
+ * The largest maximal video-only subtree in `tree` (first-found wins ties,
+ * same convention as `findLargestLeafGroup`) — "maximal" meaning recursion
+ * stops the moment a node qualifies, so this never returns an inner slice of
+ * a bigger qualifying region. `null` when no video leaf is grouped alone
+ * anywhere (e.g. every video leaf is individually paired with a non-video
+ * leaf — `insertVideoLeafBottom` falls back to a root bottom-dock then).
+ */
+function findLargestVideoRegion(
+  node: LayoutNode,
+  videoIds: ReadonlySet<PanelId>
+): LayoutNode | null {
+  if (isVideoOnlyRegion(node, videoIds)) return node
+  if (node.type === 'leaf') return null
+  let best: LayoutNode | null = null
+  for (const child of node.children) {
+    const candidate = findLargestVideoRegion(child, videoIds)
+    if (
+      candidate &&
+      (best === null || collectLeafIds(candidate).length > collectLeafIds(best).length)
+    ) {
+      best = candidate
+    }
+  }
+  return best
+}
+
+/** Replace the exact node reference `target` with `replacement` inside `tree`, preserving every untouched sibling's own reference (same discipline as `movePanel`/`splitPanel`'s `replace` helpers). */
+function replaceNodeByReference(
+  tree: LayoutNode,
+  target: LayoutNode,
+  replacement: LayoutNode
+): LayoutNode {
+  function walk(node: LayoutNode): LayoutNode {
+    if (node === target) return replacement
+    if (node.type === 'leaf') return node
+    let changed = false
+    const children = node.children.map((child) => {
+      const next = walk(child)
+      if (next !== child) changed = true
+      return next
+    })
+    return changed ? { ...node, children } : node
+  }
+  return walk(tree)
+}
+
+/**
+ * Reopen path for a returning `video:${id}` leaf (a pop-out closing, or any
+ * future video reopen) — replaces `insertPanelBalanced` for video leaves ONLY
+ * (decision 2026-07-20; see docs/decisions/README.md). `insertPanelBalanced`'s
+ * largest-ALL-LEAF-group heuristic (`findLargestLeafGroup`) does not
+ * distinguish panel kinds: when the video region isn't itself an all-leaf
+ * split — most simply, exactly one video feed remains, which
+ * `buildBalancedGrid` represents as a bare leaf, not a split — the returning
+ * feed instead joins whatever OTHER all-leaf group is largest, which in the
+ * default tree is the `[audio, weather]` pair in the left column. That is the
+ * "reopened video lands in the left column" bug this function fixes.
+ *
+ * `insertVideoLeafBottom` only ever considers video-only regions
+ * (`findLargestVideoRegion`, filtered to video leaves alone), so it can never
+ * pick the audio/weather pair or dock beside fr24. It rebuilds that region
+ * from scratch via `buildBalancedGrid` over the region's existing video ids
+ * plus the new one, in their existing tree order — the same row/rebalance
+ * shape `buildBalancedGrid` would produce for that many feeds from a cold
+ * start, which is what "the bottom row" means here: because
+ * `buildBalancedGrid` slices its input sequentially into front-loaded rows,
+ * appending the new id at the END of that list always places it in the LAST
+ * (bottom) row, adding a fresh bottom row exactly when the feed count crosses
+ * a `ceil(sqrt(n))` row-count threshold (see buildBalancedGrid's own doc
+ * comment) — i.e. "add a new bottom row once the current one is full" falls
+ * out of the same math the default grid already uses, rather than a second,
+ * separately-tuned capacity rule.
+ *
+ * `null` tree or zero existing video leaves: there is no video region to
+ * join, so the new leaf docks as a new outermost BOTTOM row of the whole
+ * tree (never the left column, never paired with audio/fr24) — mirroring
+ * `movePanel`'s root-edge dock rather than guessing a location.
+ * An id already present, or `leaf` already the only leaf, is a no-op (same
+ * tree reference).
+ */
+export function insertVideoLeafBottom(tree: LayoutNode | null, leaf: LayoutLeaf): LayoutNode {
+  if (tree === null) return leaf
+  if (collectLeafIds(tree).includes(leaf.id)) return tree
+
+  const videoIds = new Set(collectLeafIds(tree).filter(isVideoPanelId))
+  const region = videoIds.size > 0 ? findLargestVideoRegion(tree, videoIds) : null
+
+  if (region === null) {
+    const splitId = nextSplitId(tree)
+    return {
+      type: 'split',
+      id: splitId,
+      orientation: 'vertical',
+      children: [tree, leaf],
+      sizes: [100 - ROOT_DOCK_SHARE_PCT, ROOT_DOCK_SHARE_PCT]
+    }
+  }
+
+  const regionIds = collectLeafIds(region)
+  const newGrid = buildBalancedGrid([...regionIds, leaf.id])
+  // Non-null: regionIds has >=1 entry (isVideoOnlyRegion requires it) plus leaf.id.
+  return replaceNodeByReference(tree, region, newGrid!)
+}
+
 /**
  * Set `splitId`'s sizes to `sizes` (renormalized to sum to 100). If the
  * renormalized sizes are within epsilon of the split's current sizes, returns
