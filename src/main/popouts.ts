@@ -2,7 +2,8 @@ import { BrowserWindow } from 'electron'
 import { join } from 'path'
 import type { OpenPopoutRequest, PopoutState, PopoutSummary, WindowBoundsState } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
-import { nextPopoutId, popoutSummaries } from '@shared/session'
+import { buildBalancedGrid, type PanelId } from '@shared/panelLayout'
+import { nextPopoutId, popoutSummaries, type PopoutSlicePatch } from '@shared/session'
 import { getSessionState, mergePopouts, patchPopout, removePopout, upsertPopout } from './session'
 import { boundsStateFor, resolveSavedBounds, trackWindowBounds } from './windowState'
 
@@ -63,7 +64,13 @@ export class PopoutManager {
         displayId: null
       },
       feedIds: [...request.feedIds],
-      video: request.layout,
+      // The pop-out's own panel-canvas tree (decision 2026-07-20) — a fresh
+      // balanced grid over its starting feeds, the same shape a from-scratch
+      // main-window video region gets. `request.layout` (VideoLayoutState) is
+      // no longer read here; it survives on `OpenPopoutRequest` only because
+      // nothing has removed the field yet (see @shared/ipc's doc comment).
+      tree: buildBalancedGrid(request.feedIds.map((f): PanelId => `video:${f}`)),
+      videoFit: {},
       volumes: {}
     }
     upsertPopout(slice)
@@ -82,13 +89,19 @@ export class PopoutManager {
     this.windows.get(id)?.close()
   }
 
-  /** Persist a pop-out renderer's own layout / per-feed volumes into its slice. */
-  patchPopout(
-    id: number,
-    patch: { video?: PopoutState['video']; volumes?: PopoutState['volumes'] }
-  ): void {
+  /**
+   * Persist a pop-out renderer's own layout / fit / per-feed volumes / feed
+   * set into its slice. Broadcasts the open-pop-out set whenever `feedIds`
+   * is part of the patch — that's what tells every OTHER window (the main
+   * grid's `startPopoutFeedTracking`, and this feed's `MergeIntoControl`)
+   * that a feed changed hands, e.g. a per-leaf close inside a multi-feed
+   * pop-out (`usePopoutLayout`'s `closePanel`) returning just that one feed
+   * to the main window without closing the whole pop-out.
+   */
+  patchPopout(id: number, patch: PopoutSlicePatch): void {
     if (!this.windows.has(id)) return
     patchPopout(id, patch)
+    if (patch.feedIds !== undefined) this.broadcast()
   }
 
   /**
