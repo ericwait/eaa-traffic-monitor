@@ -4,9 +4,11 @@ import {
   buildDefaultTree,
   insertPanelBalanced,
   insertVideoLeafBottom,
+  movePanel as movePanelOp,
   normalizeTree,
   removePanel,
   updateSplitSizes as updateSplitSizesOp,
+  type DropTarget,
   type LayoutLeaf,
   type LayoutNode,
   type LayoutProfile,
@@ -30,8 +32,14 @@ const INITIAL_NAV_STATE: Fr24NavState = {
   isLoading: false
 }
 
-/** The overlays that can cover the FR24 region (each hides the native view). */
-export type OverlayKind = 'about' | 'add-channel'
+/**
+ * The overlays that can cover the FR24 region (each hides the native view).
+ * `'move-panel'` (PR4 of the panel-system effort) is the accessible,
+ * e2e-deterministic move path — see layout/MovePanelModal.tsx — landed BEFORE
+ * pointer-driven drag-to-dock (`feature/panel-drag-dock`); see
+ * docs/decisions/README.md (decision 2026-07-20).
+ */
+export type OverlayKind = 'about' | 'add-channel' | 'move-panel'
 
 export interface AppState {
   /** Latest FR24 navigation state, mirrored from the main process. */
@@ -128,6 +136,13 @@ export interface AppState {
   layoutProfiles: LayoutProfile[]
   /** Which saved profile currently matches the canvas, for UI highlighting only — store-only (never persisted) and cleared by any structural edit, since an edit means the canvas no longer matches that profile exactly. */
   activeProfileName: string | null
+  /**
+   * The panel MovePanelModal is currently open for, or null. Momentary UI
+   * state (never persisted) — mirrors the `dragPanelId`/`audioDragId`
+   * pattern. Non-null exactly while `overlay === 'move-panel'`; see
+   * `openMovePanel`.
+   */
+  movePanelId: PanelId | null
 
   /** Replace the whole tree (hydrate, a sanitizer fallback, a future template/profile apply). Normalizes on the way in. */
   applyTree: (tree: LayoutNode) => void
@@ -143,6 +158,12 @@ export interface AppState {
   setVideoFit: (feedId: string, mode: VideoFitMode) => void
   /** Mark/unmark the panel being header-drag-dragged. */
   setDragPanelId: (id: PanelId | null) => void
+  /** Move `id` to `target` (MovePanelModal's commit, and the future header-drag-to-dock landing). A no-op per the pure op's own rules (self-drop, stale ids, only-leaf). */
+  movePanel: (id: PanelId, target: DropTarget) => void
+  /** Open MovePanelModal for `id` (sets `overlay: 'move-panel'` + `movePanelId`). */
+  openMovePanel: (id: PanelId) => void
+  /** Set/clear which panel MovePanelModal targets — used by the modal's own close handler alongside `setOverlay(null)`. */
+  setMovePanelId: (id: PanelId | null) => void
 
   // --- Weather slice (field METAR/TAF) ------------------------------------
   /** Latest weather snapshot (from a get/refresh call or a poll push), or null before the first successful fetch. */
@@ -214,6 +235,7 @@ export const useAppStore = create<AppState>((set) => ({
   videoFit: {},
   layoutProfiles: [],
   activeProfileName: null,
+  movePanelId: null,
 
   applyTree: (tree) =>
     set((state) => {
@@ -271,6 +293,16 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({ videoFit: { ...state.videoFit, [feedId]: mode } })),
 
   setDragPanelId: (dragPanelId) => set({ dragPanelId }),
+
+  movePanel: (id, target) =>
+    set((state) => {
+      const next = movePanelOp(state.panelTree, id, target)
+      if (next === state.panelTree) return state
+      return { panelTree: next, layoutRevision: state.layoutRevision + 1, activeProfileName: null }
+    }),
+
+  openMovePanel: (id) => set({ overlay: 'move-panel', movePanelId: id }),
+  setMovePanelId: (movePanelId) => set({ movePanelId }),
 
   weatherSnapshot: null,
   weatherError: null,
