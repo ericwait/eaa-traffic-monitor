@@ -13,8 +13,19 @@ version = "0.0.0"
 description = "MkDocs Material site generator for the Airshow Traffic Monitor docs (content lives in ../docs)."
 requires-python = ">=3.11"
 dependencies = [
+    # Pin against the MkDocs 2.0 break (decision 2026-07-20). MkDocs 2.0 is a
+    # from-scratch rewrite that REMOVES the plugin system and rewrites the
+    # theming layer, with no migration path from 1.x — it breaks Material for
+    # MkDocs, and with it this site's custom_dir overrides (the home-page ad +
+    # social-card meta) and the pymdownx extensions. mkdocs-material 9.x does
+    # NOT itself cap mkdocs<2, so cap the core here; otherwise the day 2.0 ships
+    # a lock refresh could silently pull it in. Material's own team has stopped
+    # development in favor of Zensical, its 1.x-compatible successor — migrating
+    # there is the eventual path (see Implementation-Plan.md backlog).
+    # https://squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0/
+    "mkdocs>=1.6,<2",
     "mkdocs-material>=9.5,<10",
-    "pymdown-extensions>=10.7",
+    "pymdown-extensions>=10.7,<12",
 ]
 
 [tool.uv]

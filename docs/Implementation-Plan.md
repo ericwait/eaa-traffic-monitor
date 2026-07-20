@@ -82,6 +82,7 @@ The v0.1.0 release is complete when:
 - Config hot-reload.
 - YouTube loopback-audio capture exploration.
 - Multiple simultaneous tracking panels.
+- Evaluate migrating the docs site to Zensical (the Material team's 1.x-compatible MkDocs successor) — MkDocs 2.0 removes plugins and rewrites theming with no migration path, so the toolchain is pinned to `mkdocs<2` for now (see TechStack § Known limitations).
 
 ## Progress log
 

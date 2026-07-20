@@ -133,6 +133,10 @@ A tag carrying a pre-release identifier (the `-` in `v0.1.0-alpha.1`) publishes 
 - **Git LFS vs the legacy Pages build.**
   Binary assets are LFS-tracked (decision 2026-07-18), and the current branch-based Pages build serves LFS *pointer files* — so images on the published docs site stay broken until the Phase 5 Actions-based site build (LFS-aware checkout) replaces it.
   GitHub's own rendering of the repository's markdown is unaffected.
+- **MkDocs 2.0 breaks the docs toolchain; pinned to 1.x.**
+  MkDocs 2.0 is a from-scratch rewrite that removes the plugin system and rewrites theming with no 1.x migration path, breaking Material for MkDocs and with it this site's `custom_dir` overrides (the home-page advertisement and social-card meta) and the pymdownx extensions.
+  `website/pyproject.toml` therefore pins `mkdocs<2` — mkdocs-material 9.x does not cap the core itself, so without this a lockfile refresh could silently pull 2.0 once it ships (decision 2026-07-20).
+  The Material team has stopped development in favor of Zensical, a 1.x-compatible successor, which is the eventual migration path (see the Implementation-Plan backlog).
 - **Alpha artifacts are unsigned.**
   `electron-builder` runs with `CSC_IDENTITY_AUTO_DISCOVERY=false` for the alpha pipeline — no signing certificate exists yet.
   macOS Gatekeeper requires a right-click → Open on first launch; Windows SmartScreen shows an "unrecognized app" warning requiring "More info → Run anyway."
