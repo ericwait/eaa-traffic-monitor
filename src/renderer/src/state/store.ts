@@ -15,6 +15,12 @@ import {
   type PanelId,
   type VideoFitMode
 } from '@shared/panelLayout'
+import {
+  applyProfileByIndex,
+  deleteProfile as deleteProfileOp,
+  renameProfile as renameProfileOp,
+  saveProfile as saveProfileOp
+} from '@shared/layoutProfiles'
 import { defaultFeeds } from '../youtube/defaultFeeds'
 import type { AudioOutputDevice } from '../audio/devices'
 import { panelKind } from '../layout/panelMeta'
@@ -37,9 +43,12 @@ const INITIAL_NAV_STATE: Fr24NavState = {
  * `'move-panel'` (PR4 of the panel-system effort) is the accessible,
  * e2e-deterministic move path — see layout/MovePanelModal.tsx — landed BEFORE
  * pointer-driven drag-to-dock (`feature/panel-drag-dock`); see
- * docs/decisions/README.md (decision 2026-07-20).
+ * docs/decisions/README.md (decision 2026-07-20). `'layout-manager'` (PR5) is
+ * the snap template gallery + named-profile CRUD dialog — see
+ * layout/LayoutManagerModal.tsx — opened from the native Layout menu's
+ * "Layout Manager…" item (src/main/menu.ts).
  */
-export type OverlayKind = 'about' | 'add-channel' | 'move-panel'
+export type OverlayKind = 'about' | 'add-channel' | 'move-panel' | 'layout-manager'
 
 export interface AppState {
   /** Latest FR24 navigation state, mirrored from the main process. */
@@ -164,6 +173,26 @@ export interface AppState {
   openMovePanel: (id: PanelId) => void
   /** Set/clear which panel MovePanelModal targets — used by the modal's own close handler alongside `setOverlay(null)`. */
   setMovePanelId: (id: PanelId | null) => void
+  /**
+   * Save the CURRENT canvas tree as a named profile (LayoutManagerModal's
+   * "Save current layout as…" form) — delegates to `@shared/layoutProfiles`'
+   * `saveProfile` (upserts by exact name match; a blank/whitespace name is a
+   * no-op). Marks the new/updated profile as the active one, since the
+   * canvas now matches it exactly.
+   */
+  saveProfile: (name: string) => void
+  /** Rename the profile at `index` (a no-op per the pure op's rules: blank name, unchanged name, or a collision with another profile's name). Keeps `activeProfileName` in step when the renamed profile was the active one. */
+  renameProfile: (index: number, name: string) => void
+  /** Delete the profile at `index`. Clears `activeProfileName` if that was the deleted profile — the canvas itself is untouched. */
+  deleteProfile: (index: number) => void
+  /**
+   * Apply the profile at `index` to the canvas. Unlike `applyTree` (used for
+   * a template instantiation, which always CLEARS `activeProfileName` — a
+   * template isn't a saved profile), this SETS `activeProfileName` to the
+   * applied profile's name, so the modal/menu can highlight which saved
+   * profile currently matches the canvas.
+   */
+  applyProfile: (index: number) => void
 
   // --- Weather slice (field METAR/TAF) ------------------------------------
   /** Latest weather snapshot (from a get/refresh call or a poll push), or null before the first successful fetch. */
@@ -303,6 +332,53 @@ export const useAppStore = create<AppState>((set) => ({
 
   openMovePanel: (id) => set({ overlay: 'move-panel', movePanelId: id }),
   setMovePanelId: (movePanelId) => set({ movePanelId }),
+
+  saveProfile: (name) =>
+    set((state) => {
+      const nextProfiles = saveProfileOp(state.layoutProfiles, name, state.panelTree)
+      if (nextProfiles === state.layoutProfiles) return state // blank/whitespace name — rejected
+      // saveProfileOp already validated `name` is non-blank (else it would
+      // have returned the same reference above), so trimming again here is
+      // exactly the name it saved under.
+      return { layoutProfiles: nextProfiles, activeProfileName: name.trim() }
+    }),
+
+  renameProfile: (index, name) =>
+    set((state) => {
+      const oldName = state.layoutProfiles[index]?.name
+      const nextProfiles = renameProfileOp(state.layoutProfiles, index, name)
+      if (nextProfiles === state.layoutProfiles) return state
+      const renamedTo = nextProfiles[index].name
+      return {
+        layoutProfiles: nextProfiles,
+        activeProfileName: state.activeProfileName === oldName ? renamedTo : state.activeProfileName
+      }
+    }),
+
+  deleteProfile: (index) =>
+    set((state) => {
+      const deletedName = state.layoutProfiles[index]?.name
+      const nextProfiles = deleteProfileOp(state.layoutProfiles, index)
+      if (nextProfiles === state.layoutProfiles) return state
+      return {
+        layoutProfiles: nextProfiles,
+        activeProfileName: state.activeProfileName === deletedName ? null : state.activeProfileName
+      }
+    }),
+
+  applyProfile: (index) =>
+    set((state) => {
+      const tree = applyProfileByIndex(state.layoutProfiles, index)
+      if (tree === null) return state
+      const normalized = normalizeTree(tree)
+      const targetName = state.layoutProfiles[index].name
+      if (normalized === state.panelTree && state.activeProfileName === targetName) return state
+      return {
+        panelTree: normalized,
+        layoutRevision: state.layoutRevision + 1,
+        activeProfileName: targetName
+      }
+    }),
 
   weatherSnapshot: null,
   weatherError: null,
