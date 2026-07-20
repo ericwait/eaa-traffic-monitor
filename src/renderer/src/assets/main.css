@@ -262,6 +262,75 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+   Header drag-to-dock (PR6 "feature/panel-drag-dock" — useHeaderDrag.ts +
+   DragOverlay.tsx). `.panel-head--draggable`/`--dragging` are applied by
+   layout/panelMeta.ts's `panelHeadClassName` helper, called from every
+   `.panel-head`-rendering component (AudioPanel/WeatherPanel/Fr24Panel/
+   LeafFrame's video head). `.drag-layer`/`.dropzone-highlight`/`.drag-ghost`
+   are DragOverlay.tsx's own fixed overlay, positioned in VIEWPORT coordinates
+   (see that file's header comment for why).
+--------------------------------------------------------------------------- */
+.panel-head--draggable {
+  cursor: grab;
+  /* A header-drag gesture must never start a text selection instead — same
+     vendor-prefix pairing as .modal-backdrop's backdrop-filter above. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.panel-head--dragging {
+  cursor: grabbing;
+  opacity: 0.6;
+}
+
+/* Belt-and-suspenders alongside `setPointerCapture` (docs/Panel-System-Plan.md
+   § Key interactions § Header drag-to-dock): for the WHOLE duration of a
+   drag — not just while the pointer happens to be over one — every embedded
+   video iframe stops accepting pointer events, so it can never intercept or
+   react to the synthetic drag gesture passing over it. The FR24 native view
+   needs no such rule: it is hidden outright by the consolidated FR24
+   visibility rule (LayoutShell.tsx) the instant `dragPanelId` is set. */
+.panel-canvas[data-dragging='true'] .video-tile-player,
+.panel-canvas[data-dragging='true'] .video-tile-player iframe {
+  pointer-events: none;
+}
+
+.drag-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none; /* never intercepts the drag's own captured pointer */
+}
+
+.dropzone-highlight {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 6px;
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 70;
+  transform: translate(
+    14px,
+    14px
+  ); /* offset from the cursor so it never occludes the pointer itself */
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------------------------------------------------------------------------
    Panel chrome (heading strips) + placeholders
 --------------------------------------------------------------------------- */
 /* Fix B (docs/Panel-System-Plan.md): one flex row for every panel kind — title

@@ -169,6 +169,15 @@ export interface AppState {
   setDragPanelId: (id: PanelId | null) => void
   /** Move `id` to `target` (MovePanelModal's commit, and the future header-drag-to-dock landing). A no-op per the pure op's own rules (self-drop, stale ids, only-leaf). */
   movePanel: (id: PanelId, target: DropTarget) => void
+  /**
+   * Commit a header-drag-to-dock gesture (`layout/useHeaderDrag.ts`'s
+   * pointerup) as ONE store write: applies `movePanel` AND clears
+   * `dragPanelId` together (docs/Panel-System-Plan.md § Store slice's
+   * single-writer sequencing) — never call `movePanel` then
+   * `setDragPanelId(null)` as two separate writes for a drag commit, or the
+   * FR24 hidden->visible transition could key off a stale intermediate state.
+   */
+  commitDrag: (id: PanelId, target: DropTarget) => void
   /** Open MovePanelModal for `id` (sets `overlay: 'move-panel'` + `movePanelId`). */
   openMovePanel: (id: PanelId) => void
   /** Set/clear which panel MovePanelModal targets — used by the modal's own close handler alongside `setOverlay(null)`. */
@@ -328,6 +337,18 @@ export const useAppStore = create<AppState>((set) => ({
       const next = movePanelOp(state.panelTree, id, target)
       if (next === state.panelTree) return state
       return { panelTree: next, layoutRevision: state.layoutRevision + 1, activeProfileName: null }
+    }),
+
+  commitDrag: (id, target) =>
+    set((state) => {
+      const next = movePanelOp(state.panelTree, id, target)
+      if (next === state.panelTree) return { dragPanelId: null }
+      return {
+        panelTree: next,
+        layoutRevision: state.layoutRevision + 1,
+        activeProfileName: null,
+        dragPanelId: null
+      }
     }),
 
   openMovePanel: (id) => set({ overlay: 'move-panel', movePanelId: id }),

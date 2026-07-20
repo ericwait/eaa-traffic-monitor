@@ -3,6 +3,7 @@ import type { Fr24Bounds } from '@shared/ipc'
 import { boundsEqual, rectToBounds } from '@shared/fr24Bounds'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
 import PanelChromeButtons from '../layout/PanelChromeButtons'
+import { panelHeadClassName } from '../layout/panelMeta'
 
 // The Flight Tracking panel: a toolbar plus a NON-SCROLLING placeholder region
 // that the native FR24 WebContentsView is positioned over. The renderer never
@@ -26,6 +27,7 @@ const PANEL_TITLE = 'Flight Tracking'
 function Fr24Panel(): React.JSX.Element {
   const navState = useAppStore((s) => s.navState)
   const toggleMaximize = useAppStore((s) => s.toggleMaximize)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
   const regionRef = useRef<HTMLDivElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const lastSentRef = useRef<Fr24Bounds | null>(null)
@@ -80,7 +82,10 @@ function Fr24Panel(): React.JSX.Element {
 
   return (
     <section className="fr24-panel" aria-label="Flight Tracking">
-      <header className="panel-head" onDoubleClick={() => toggleMaximize(PANEL_ID)}>
+      <header
+        className={panelHeadClassName('panel-head', PANEL_ID, dragPanelId)}
+        onDoubleClick={() => toggleMaximize(PANEL_ID)}
+      >
         <h2 className="panel-title">{PANEL_TITLE}</h2>
         <div className="panel-head-spacer" />
         <PanelChromeButtons panelId={PANEL_ID} title={PANEL_TITLE} />

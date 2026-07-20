@@ -4,6 +4,7 @@ import { audioEngine } from './engine'
 import AddChannelModal from './AddChannelModal'
 import StreamStrip from './StreamStrip'
 import PanelChromeButtons from '../layout/PanelChromeButtons'
+import { panelHeadClassName } from '../layout/panelMeta'
 
 // The ATC Audio panel — its own leaf on the panel canvas (see
 // layout/LeafFrame.tsx). Owns the panel header ("ATC Audio" + a
@@ -29,6 +30,7 @@ function AudioPanel(): React.JSX.Element {
   const overlay = useAppStore((s) => s.overlay)
   const setOverlay = useAppStore((s) => s.setOverlay)
   const toggleMaximize = useAppStore((s) => s.toggleMaximize)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
 
   // Build + start the engine once. ensureStarted is StrictMode-safe and the
   // engine lives for the window's life, so there is deliberately no teardown on
@@ -51,7 +53,10 @@ function AudioPanel(): React.JSX.Element {
 
   return (
     <section className="audio-panel" aria-label="ATC Audio">
-      <header className="panel-head audio-head" onDoubleClick={() => toggleMaximize(PANEL_ID)}>
+      <header
+        className={panelHeadClassName('panel-head audio-head', PANEL_ID, dragPanelId)}
+        onDoubleClick={() => toggleMaximize(PANEL_ID)}
+      >
         <h2 className="panel-title">{PANEL_TITLE}</h2>
         <div className="audio-head-spacer" />
         <button
