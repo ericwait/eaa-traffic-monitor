@@ -1,5 +1,8 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { defaultFeeds } from '../../src/renderer/src/youtube/defaultFeeds'
 import { mainEntry, getMainWindow, e2eEnv } from './support'
 
@@ -11,6 +14,12 @@ import { mainEntry, getMainWindow, e2eEnv } from './support'
 // the Move-panel modal, and the video fit/fill toggle — see below. Deeper
 // canvas behavior (splitter drag geometry, snap templates, header
 // drag-to-dock) lands with later PRs in the panel-system effort.
+//
+// Isolated userData (same convention as channels.spec.ts/popout.spec.ts/
+// layoutProfiles.spec.ts, PR6 "feature/panel-drag-dock" e2e-isolation fix):
+// this suite closes/reopens/moves/maximizes panels — every one of those is a
+// `session.panelLayout` write — and without its own E2E_USERDATA it would
+// share, and could corrupt, the developer's real session.json.
 
 /**
  * Click a native "Panels" menu checkbox by its label (the panel's title —
@@ -52,9 +61,14 @@ async function clickLayoutMenuItem(electronApp: ElectronApplication, label: stri
 
 let app: ElectronApplication
 let page: Page
+let userDataDir: string
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: [mainEntry], env: e2eEnv() })
+  userDataDir = mkdtempSync(join(tmpdir(), 'atm-e2e-panels-'))
+  app = await electron.launch({
+    args: [mainEntry],
+    env: e2eEnv({ E2E_USERDATA: userDataDir })
+  })
 
   // Keep YouTube off the network — irrelevant to this suite's assertions, but
   // consistent with every other spec so a developer machine behaves like CI.
@@ -72,6 +86,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close()
+  if (userDataDir) rmSync(userDataDir, { recursive: true, force: true })
 })
 
 test('the default layout renders a data-panel-id frame for every panel: audio, weather, fr24, and each video feed', async () => {

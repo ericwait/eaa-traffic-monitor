@@ -1,5 +1,8 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { mainEntry, getMainWindow, e2eEnv } from './support'
 
 // Audio-panel smoke for the built app. Proves the ATC Audio pillar mounts, the
@@ -16,6 +19,12 @@ import { mainEntry, getMainWindow, e2eEnv } from './support'
 // states {connecting, live, reconnecting, feed-down, error}: with no network it
 // settles into reconnecting/feed-down, with network it reaches connecting/live —
 // either way the assertion holds without waiting on the network.
+//
+// Isolated userData (same convention as channels.spec.ts/popout.spec.ts/
+// layoutProfiles.spec.ts, PR6 "feature/panel-drag-dock" e2e-isolation fix):
+// connect/mute/solo clicks all persist to the developer's real session.json
+// without this — E2E_USERDATA points every write at a throwaway directory
+// instead.
 //
 // Prerequisite: `electron-vite build` must have run (out/main + out/renderer).
 // `just e2e` builds first.
@@ -37,11 +46,16 @@ const CONNECTED_STATES = new Set(['connecting', 'live', 'reconnecting', 'feed-do
 
 let app: ElectronApplication
 let page: Page
+let userDataDir: string
 
 test.beforeAll(async () => {
   // Short backoff + no audible autoplay so the smoke never waits on a network
   // or a user gesture.
-  app = await electron.launch({ args: [mainEntry], env: e2eEnv({ AUDIO_E2E: '1' }) })
+  userDataDir = mkdtempSync(join(tmpdir(), 'atm-e2e-audio-'))
+  app = await electron.launch({
+    args: [mainEntry],
+    env: e2eEnv({ AUDIO_E2E: '1', E2E_USERDATA: userDataDir })
+  })
   await app.firstWindow()
   page = await getMainWindow(app)
   await page.waitForLoadState('domcontentloaded')
@@ -49,6 +63,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close()
+  if (userDataDir) rmSync(userDataDir, { recursive: true, force: true })
 })
 
 test('mounts the ATC Audio panel heading', async () => {

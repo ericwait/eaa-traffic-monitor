@@ -1,5 +1,8 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { defaultFeeds } from '../../src/renderer/src/youtube/defaultFeeds'
 import { mainEntry, getMainWindow, e2eEnv } from './support'
 
@@ -15,14 +18,24 @@ import { mainEntry, getMainWindow, e2eEnv } from './support'
 // badge's specific value, only that the identity chrome and per-panel
 // plumbing are present.
 //
+// Isolated userData (same convention as channels.spec.ts/popout.spec.ts/
+// layoutProfiles.spec.ts, PR6 "feature/panel-drag-dock" e2e-isolation fix):
+// without its own E2E_USERDATA this suite shares the developer's real
+// session.json with every other spec run against the default profile.
+//
 // Prerequisite: `electron-vite build` must have run so out/main/index.js and
 // out/renderer exist. `just e2e` builds first.
 
 let app: ElectronApplication
 let page: Page
+let userDataDir: string
 
 test.beforeAll(async () => {
-  app = await electron.launch({ args: [mainEntry], env: e2eEnv() })
+  userDataDir = mkdtempSync(join(tmpdir(), 'atm-e2e-video-'))
+  app = await electron.launch({
+    args: [mainEntry],
+    env: e2eEnv({ E2E_USERDATA: userDataDir })
+  })
 
   // Keep YouTube off the network so every tile stays in its offline placeholder
   // state, deterministically, on a developer machine too (see audio.spec.ts's
@@ -42,6 +55,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close()
+  if (userDataDir) rmSync(userDataDir, { recursive: true, force: true })
 })
 
 test('renders one video tile per configured default feed', async () => {
