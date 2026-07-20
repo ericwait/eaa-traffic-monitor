@@ -102,3 +102,28 @@ test('closing the pop-out returns its feed to the main grid', async () => {
     main.locator(`[data-testid="video-tile"][data-feed-id="${POPPED.id}"]`)
   ).toBeVisible()
 })
+
+test('the returned feed lands in the bottom row of the video grid, never the left column (Fix C, src/shared/panelLayout.ts insertVideoLeafBottom)', async () => {
+  const audioBox = await main.locator('.leaf-frame[data-panel-id="audio"]').boundingBox()
+  const poppedBox = await main
+    .locator(`.leaf-frame[data-panel-id="video:${POPPED.id}"]`)
+    .boundingBox()
+  const otherVideoBoxes = await Promise.all(
+    defaultFeeds
+      .filter((f) => f.id !== POPPED.id)
+      .map((f) => main.locator(`.leaf-frame[data-panel-id="video:${f.id}"]`).boundingBox())
+  )
+
+  expect(audioBox).toBeTruthy()
+  expect(poppedBox).toBeTruthy()
+  for (const box of otherVideoBoxes) expect(box).toBeTruthy()
+
+  // Never the left column: the returned tile sits in the right-hand video
+  // region, to the right of the audio panel's own column.
+  expect(poppedBox!.x).toBeGreaterThanOrEqual(audioBox!.x + audioBox!.width - 1)
+
+  // Bottom row: its top (y) is at least as far down as every other video
+  // tile's — i.e. no other video tile is in a row below it.
+  const maxOtherY = Math.max(...otherVideoBoxes.map((b) => b!.y))
+  expect(poppedBox!.y).toBeGreaterThanOrEqual(maxOtherY - 1)
+})

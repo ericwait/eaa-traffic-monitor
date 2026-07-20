@@ -3,6 +3,7 @@ import type { Fr24NavState, WeatherResult, WeatherSnapshot } from '@shared/ipc'
 import {
   buildDefaultTree,
   insertPanelBalanced,
+  insertVideoLeafBottom,
   normalizeTree,
   removePanel,
   updateSplitSizes as updateSplitSizesOp,
@@ -14,6 +15,7 @@ import {
 } from '@shared/panelLayout'
 import { defaultFeeds } from '../youtube/defaultFeeds'
 import type { AudioOutputDevice } from '../audio/devices'
+import { panelKind } from '../layout/panelMeta'
 
 // The per-window live UI store (zustand). Phase 1 holds just the FR24 nav state
 // (pushed from main) and the overlay flag that drives the z-order rule. It works
@@ -240,7 +242,17 @@ export const useAppStore = create<AppState>((set) => ({
 
   openPanel: (leaf) =>
     set((state) => {
-      const next = insertPanelBalanced(state.panelTree, leaf)
+      // Fix C (docs/Panel-System-Plan.md, decision 2026-07-20): a returning
+      // video leaf (pop-out close, the only reopen path today) always joins
+      // the BOTTOM ROW of the video region — insertPanelBalanced's largest-
+      // all-leaf-group heuristic can otherwise pick the audio/weather pair
+      // (e.g. when exactly one video feed remains, buildBalancedGrid
+      // represents it as a bare leaf, not a joinable split) and land the
+      // panel in the left column. Non-video reopens keep insertPanelBalanced.
+      const next =
+        panelKind(leaf.id) === 'video'
+          ? insertVideoLeafBottom(state.panelTree, leaf)
+          : insertPanelBalanced(state.panelTree, leaf)
       if (next === state.panelTree) return state
       return { panelTree: next, layoutRevision: state.layoutRevision + 1, activeProfileName: null }
     }),
