@@ -10,6 +10,8 @@ import {
 import { useAppStore } from '../state/store'
 import { canvasRenderOrder } from './canvasRenderOrder'
 import { panelKind } from './panelMeta'
+import { useHeaderDrag } from './useHeaderDrag'
+import DragOverlay from './DragOverlay'
 import LeafFrame from './LeafFrame'
 import Splitter from './Splitter'
 
@@ -113,6 +115,7 @@ function collectSplitMeta(
 function PanelCanvas(): React.JSX.Element {
   const panelTree = useAppStore((s) => s.panelTree)
   const maximizedPanelId = useAppStore((s) => s.maximizedPanelId)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
   const updateSplitSizesAction = useAppStore((s) => s.updateSplitSizes)
 
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -157,6 +160,16 @@ function PanelCanvas(): React.JSX.Element {
     [effectiveTree, leafRectById]
   )
 
+  // Header drag-to-dock (docs/Panel-System-Plan.md § Key interactions § Header
+  // drag-to-dock; feature/panel-drag-dock): ONE delegated pointer listener set
+  // on the canvas container below hit-tests purely against these SAME `leaves`
+  // /`containerRect` — never `elementFromPoint` — see useHeaderDrag.ts.
+  const { dragState, handlers: dragHandlers } = useHeaderDrag({
+    containerRef,
+    leaves,
+    rootRect: containerRect
+  })
+
   // A stale maximizedPanelId (a leaf closed while maximized — defensively
   // guarded against even though closePanel already clears it) must never hide
   // every other leaf; only apply maximize when the target still exists.
@@ -195,7 +208,19 @@ function PanelCanvas(): React.JSX.Element {
   const renderOrder = canvasRenderOrder(panelTree)
 
   return (
-    <div className="panel-canvas" ref={containerRef}>
+    <div
+      className="panel-canvas"
+      ref={containerRef}
+      // Drives the video/iframe-host `pointer-events: none` rule
+      // (docs/Panel-System-Plan.md § Key interactions § Header drag-to-dock)
+      // for the WHOLE duration of a drag, not just while the pointer happens
+      // to be over one — see assets/main.css.
+      data-dragging={dragPanelId !== null ? 'true' : undefined}
+      onPointerDown={dragHandlers.onPointerDown}
+      onPointerMove={dragHandlers.onPointerMove}
+      onPointerUp={dragHandlers.onPointerUp}
+      onPointerCancel={dragHandlers.onPointerCancel}
+    >
       {renderOrder.map((id) => {
         const rect = leafRectById.get(id)
         if (!rect) return null // defensive: tree/rects momentarily out of step across a render (should not happen)
@@ -232,6 +257,15 @@ function PanelCanvas(): React.JSX.Element {
             />
           )
         })}
+
+      {dragState && (
+        <DragOverlay
+          draggedId={dragState.draggedId}
+          pointer={dragState.pointer}
+          dropTarget={dragState.dropTarget}
+          highlightRect={dragState.highlightRect}
+        />
+      )}
     </div>
   )
 }

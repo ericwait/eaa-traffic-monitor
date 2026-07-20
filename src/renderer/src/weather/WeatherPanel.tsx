@@ -8,6 +8,7 @@ import {
 import type { WeatherTafPeriod } from '@shared/weather'
 import { useAppStore } from '../state/store'
 import PanelChromeButtons from '../layout/PanelChromeButtons'
+import { panelHeadClassName } from '../layout/panelMeta'
 
 // The "Field Weather" card — a compact METAR/TAF summary for the tracked
 // station, its own top-level panel on the canvas (decision 2026-07-19 — it
@@ -73,6 +74,7 @@ function WeatherPanel(): React.JSX.Element {
   const setWeatherResult = useAppStore((s) => s.setWeatherResult)
   const setWeatherLoading = useAppStore((s) => s.setWeatherLoading)
   const toggleMaximize = useAppStore((s) => s.toggleMaximize)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
 
   const [now, setNow] = useState(() => Date.now())
 
@@ -122,7 +124,10 @@ function WeatherPanel(): React.JSX.Element {
 
   return (
     <section className="weather-panel" aria-label="Field Weather" data-testid="weather-panel">
-      <header className="panel-head weather-head" onDoubleClick={() => toggleMaximize(PANEL_ID)}>
+      <header
+        className={panelHeadClassName('panel-head weather-head', PANEL_ID, dragPanelId)}
+        onDoubleClick={() => toggleMaximize(PANEL_ID)}
+      >
         <h2 className="panel-title">{PANEL_TITLE}</h2>
         <div className="audio-head-spacer" />
         {isStale && (

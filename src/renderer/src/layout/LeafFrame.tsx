@@ -7,7 +7,7 @@ import WeatherPanel from '../weather/WeatherPanel'
 import Fr24Panel from '../components/Fr24Panel'
 import VideoTile from '../components/VideoTile'
 import { defaultFeeds } from '../youtube/defaultFeeds'
-import { panelKind, panelTitle, videoFeedIdOf } from './panelMeta'
+import { panelHeadClassName, panelKind, panelTitle, videoFeedIdOf } from './panelMeta'
 import PanelChromeButtons from './PanelChromeButtons'
 
 // One absolutely-positioned leaf in the panel canvas. `rect` is style-only —
@@ -39,6 +39,7 @@ function VideoLeafBody({ panelId, toggleMaximize }: VideoLeafBodyProps): React.J
   const title = panelTitle(panelId)
   const fitMode = useAppStore((s) => s.videoFit[feedId] ?? 'fit')
   const setVideoFit = useAppStore((s) => s.setVideoFit)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
 
   const slotRef = useRef<HTMLDivElement | null>(null)
   const [slotSize, setSlotSize] = useState({ width: 0, height: 0 })
@@ -69,7 +70,10 @@ function VideoLeafBody({ panelId, toggleMaximize }: VideoLeafBodyProps): React.J
 
   return (
     <>
-      <header className="panel-head leaf-frame-head" onDoubleClick={toggleMaximize}>
+      <header
+        className={panelHeadClassName('panel-head leaf-frame-head', panelId, dragPanelId)}
+        onDoubleClick={toggleMaximize}
+      >
         <h2 className="panel-title">{title}</h2>
         <div className="panel-head-spacer" />
         <PanelChromeButtons

@@ -39,3 +39,17 @@ export function panelTitle(id: PanelId): string {
   }
   return KIND_TITLES[kind]
 }
+
+/**
+ * The `.panel-head` className for panel `id`, given the store's current
+ * `dragPanelId` — appends the static `panel-head--draggable` affordance class
+ * (every header is a drag source, see layout/useHeaderDrag.ts) plus
+ * `panel-head--dragging` while THIS panel is the one actually being
+ * header-dragged (docs/Panel-System-Plan.md's CSS section). `base` is the
+ * panel's own existing header class string (e.g. `'panel-head audio-head'`)
+ * — AudioPanel/WeatherPanel/Fr24Panel/LeafFrame's video head each call this
+ * rather than reimplementing the same string-building four times.
+ */
+export function panelHeadClassName(base: string, id: PanelId, dragPanelId: PanelId | null): string {
+  return `${base} panel-head--draggable${dragPanelId === id ? ' panel-head--dragging' : ''}`
+}
