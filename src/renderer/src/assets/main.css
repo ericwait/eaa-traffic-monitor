@@ -1,13 +1,20 @@
+/* Compatibility alias layer — re-points every legacy var below at the Wyvern
+   Watch semantic tokens from design/brand/tokens.css (imported in main.tsx
+   before this file) in one place, so all ~1400 lines of main.css pick up the
+   Cream Classic / Ember theme system at once. color-scheme is NOT set here:
+   tokens.css already declares `color-scheme: light dark` on :root, and the
+   dark-only hardcode this used to carry is gone (decision 2026-07-19; see
+   docs/WYVERN-RESKIN-PLAN.md Step 1). A full var rename across main.css to the
+   --color-* names directly is optional follow-up, not this PR. */
 :root {
-  color-scheme: dark;
-  --bg: #0b0f14;
-  --panel: #121821;
-  --panel-2: #0e141c;
-  --ink: #e6edf3;
-  --muted: #8b98a5;
-  --accent: #3fb0ff;
-  --line: #1e2836;
-  --line-strong: #2b3a4d;
+  --bg: var(--color-bg);
+  --panel: var(--color-surface);
+  --panel-2: var(--color-surface-2);
+  --ink: var(--color-fg);
+  --muted: var(--color-fg-muted);
+  --accent: var(--color-accent);
+  --line: var(--color-border);
+  --line-strong: color-mix(in srgb, var(--color-border) 60%, var(--color-fg));
 }
 
 * {
@@ -323,7 +330,9 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: rgba(3, 6, 10, 0.6);
+  /* Theme-correct scrim: dims toward the current theme's own background rather
+     than a hardcoded near-black, so the backdrop reads right in Cream too. */
+  background: color-mix(in srgb, var(--color-bg) 60%, transparent);
   -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
 }
@@ -373,7 +382,7 @@ body {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--accent);
-  color: #05202f;
+  color: var(--color-accent-contrast);
   font-weight: 600;
   cursor: pointer;
 }
@@ -425,6 +434,8 @@ body {
   min-width: 0;
   overflow: hidden;
   border-radius: 6px;
+  /* Deliberately dark in BOTH themes — this stands in for video content, which
+     is dark regardless of theme, not UI chrome that should follow Cream/Ember. */
   background: #05070a;
   border: 1px solid var(--line);
   /* Establishes a proper stacking context for this tile, so the identity
@@ -473,6 +484,8 @@ body {
   gap: 0.3rem;
   padding: 0.75rem;
   text-align: center;
+  /* Deliberately dark in BOTH themes — same rationale as .video-tile above:
+     it stands in for video content, not themeable chrome. */
   background: linear-gradient(180deg, #10151c, #05070a);
 }
 
@@ -507,7 +520,13 @@ body {
   justify-content: space-between;
   gap: 0.4rem;
   padding: 0.25rem 0.4rem;
-  background: linear-gradient(180deg, rgba(3, 6, 10, 0.75), rgba(3, 6, 10, 0));
+  /* Theme-correct scrim (see .modal-backdrop) — fades to the current theme's
+     own background rather than a hardcoded near-black. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg) 75%, transparent),
+    transparent
+  );
 }
 
 .video-tile-label {
@@ -530,8 +549,11 @@ body {
 }
 
 .video-tile-badge--live {
-  color: #06210f;
-  background: #3ddc84;
+  /* --color-ok is a subtler green in Cream than the old fixed bright hex, so
+     the text pairs with --color-accent-contrast (flips light/dark per theme)
+     instead of the old fixed near-black — keeps this legible in both themes. */
+  color: var(--color-accent-contrast);
+  background: var(--color-ok);
 }
 
 .video-tile-badge--offline {
@@ -553,7 +575,12 @@ body {
   align-items: center;
   gap: 0.35rem;
   padding: 0.3rem 0.4rem;
-  background: linear-gradient(0deg, rgba(3, 6, 10, 0.85), rgba(3, 6, 10, 0));
+  /* Theme-correct scrim (see .modal-backdrop). */
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--color-bg) 85%, transparent),
+    transparent
+  );
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
@@ -636,10 +663,10 @@ body {
    Colour tokens local to audio so the shared palette above is untouched.
 =========================================================================== */
 .audio-panel {
-  --ok: #37d67a;
-  --warn: #f2b84b;
-  --bad: #ff6b6b;
-  --reconn: #ff9e4a;
+  --ok: var(--color-ok);
+  --warn: var(--color-warn);
+  --bad: var(--color-danger);
+  --reconn: var(--color-reconnect);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -770,13 +797,17 @@ body {
   gap: 0.5rem;
 }
 
-/* Activity light — DISTINCT lit/unlit, keeps working while muted. */
+/* Activity light — DISTINCT lit/unlit, keeps working while muted. The unlit
+   fill is a token-derived neutral (was a hardcoded dark-ground hex) blended
+   toward --color-fg-muted so it stays visibly a filled dot against the strip's
+   own --panel-2 background in BOTH themes, not just the old dark-only skin —
+   see docs/WYVERN-RESKIN-PLAN.md Step 1 light-theme audit. */
 .activity-light {
   flex: 0 0 auto;
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: #263141;
+  background: color-mix(in srgb, var(--color-fg-muted) 55%, var(--color-surface-2) 45%);
   border: 1px solid var(--line-strong);
   transition:
     background 60ms linear,
@@ -960,7 +991,7 @@ body {
 }
 
 .solo-btn[aria-pressed='true'] {
-  color: #05202f;
+  color: var(--color-accent-contrast);
   background: var(--accent);
   border-color: var(--accent);
 }
@@ -1025,10 +1056,10 @@ body {
    the enclosing .audio-panel; only the flight-category tokens are local here.
 =========================================================================== */
 .weather-panel {
-  --vfr: #37d67a;
-  --mvfr: #3fb0ff;
-  --ifr: #ff6b6b;
-  --lifr: #e066ff;
+  --vfr: var(--color-cat-vfr);
+  --mvfr: var(--color-cat-mvfr);
+  --ifr: var(--color-cat-ifr);
+  --lifr: var(--color-cat-lifr);
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -1085,14 +1116,20 @@ body {
   color: var(--muted);
 }
 
-/* The big category badge — the primary visual signal (see docs/design/Weather.md). */
+/* The big category badge — the primary visual signal (see docs/design/Weather.md).
+   Text uses --color-accent-contrast (flips light/dark per theme) rather than a
+   single fixed dark hex: the category fills themselves flip hue AND lightness
+   between Cream and Ember (see --color-cat-* in tokens.css), so a fixed text
+   color would under-contrast in at least one theme — verified against
+   design/brand/brand-preview.html (decision 2026-07-19, WYVERN-RESKIN-PLAN.md
+   Step 1 light-theme audit: "readable from across the room" in both themes). */
 .weather-category-badge {
   font-size: 0.9rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   padding: 0.15rem 0.6rem;
   border-radius: 6px;
-  color: #05202f;
+  color: var(--color-accent-contrast);
 }
 
 .weather-category-badge[data-category='VFR'] {
@@ -1105,12 +1142,12 @@ body {
 
 .weather-category-badge[data-category='IFR'] {
   background: var(--ifr);
-  color: #1a0505;
+  color: var(--color-accent-contrast);
 }
 
 .weather-category-badge[data-category='LIFR'] {
   background: var(--lifr);
-  color: #1f0329;
+  color: var(--color-accent-contrast);
 }
 
 /* Smaller badge variant used per TAF period row. */
@@ -1328,14 +1365,16 @@ body {
   opacity: 0.55;
 }
 
-/* Feed status dot — same visual language as the strips' activity light.
-   'down' is the dark default; 'unknown' (bundled list) reads as a hollow dot. */
+/* Feed status dot — same visual language as the strips' activity light, same
+   token-derived neutral fill for the 'down' default (was a hardcoded
+   dark-ground hex — see .activity-light and WYVERN-RESKIN-PLAN.md Step 1).
+   'unknown' (bundled list) reads as a hollow dot. */
 .add-channel-status {
   flex: 0 0 auto;
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: #263141;
+  background: color-mix(in srgb, var(--color-fg-muted) 55%, var(--color-surface-2) 45%);
   border: 1px solid var(--line-strong);
 }
 
