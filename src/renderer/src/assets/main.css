@@ -253,17 +253,42 @@ body {
 /* ---------------------------------------------------------------------------
    Panel chrome (heading strips) + placeholders
 --------------------------------------------------------------------------- */
+/* Fix B (docs/Panel-System-Plan.md): one flex row for every panel kind — title
+   LEFT, chrome controls RIGHT, vertically centered, never wrapping to a
+   second line. This lives on the BASE `.panel-head` rule (not a per-panel
+   modifier) specifically because AudioPanel/WeatherPanel/Fr24Panel and
+   LeafFrame's video head all render `className="panel-head ..."` — AudioPanel
+   and WeatherPanel additionally layer their own `.audio-head`/`.weather-head`
+   modifier (harmless duplicate of the same flex properties, kept for their
+   own gap-tuning), but before this rule gained `display: flex` here, Fr24Panel
+   and the video head (bare `.panel-head`, no modifier) had NO flex context at
+   all — their `.panel-head-spacer`'s `flex: 1 1 auto` was inert on a
+   non-flex parent, so title/spacer/actions stacked as separate block rows
+   instead of one line. Adding it here (once) is what actually harmonizes all
+   four panel kinds into the same single-row header, and also shortens the
+   header for all of them at once (reduced vertical padding — was 0.5rem). */
 .panel-head {
   flex: 0 0 auto;
-  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
   border-bottom: 1px solid var(--line);
   background: var(--panel-2);
 }
 
 /* Panel header — the .label-caps treatment from tokens.css (display face,
-   uppercase, caps tracking). */
+   uppercase, caps tracking). min-width: 0 + nowrap/ellipsis (Fix B) keep a
+   long video-feed label from wrapping onto a second line and growing the now-
+   shortened header — it truncates instead, sharing the flex row with the
+   controls on the right rather than fighting them for space. */
 .panel-title {
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-family: var(--font-display);
   font-size: 0.72rem;
   font-weight: var(--weight-semibold);
