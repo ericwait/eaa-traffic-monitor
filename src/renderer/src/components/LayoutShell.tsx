@@ -3,6 +3,7 @@ import type { ThemeMode } from '@shared/ipc'
 import { collectLeafIds } from '@shared/panelLayout'
 import AboutModal from './AboutModal'
 import PanelCanvas from '../layout/PanelCanvas'
+import MovePanelModal from '../layout/MovePanelModal'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
 import { sessionSnapshot } from '../state/sessionBootstrap'
 // The adaptive Wyvern Watch mark (Cream light / Ember dark), imported as a bundled
@@ -36,6 +37,8 @@ function LayoutShell(): React.JSX.Element {
   const setNavState = useAppStore((s) => s.setNavState)
   const overlay = useAppStore((s) => s.overlay)
   const setOverlay = useAppStore((s) => s.setOverlay)
+  const movePanelId = useAppStore((s) => s.movePanelId)
+  const setMovePanelId = useAppStore((s) => s.setMovePanelId)
   const panelTree = useAppStore((s) => s.panelTree)
   const layoutRevision = useAppStore((s) => s.layoutRevision)
   const maximizedPanelId = useAppStore((s) => s.maximizedPanelId)
@@ -155,6 +158,15 @@ function LayoutShell(): React.JSX.Element {
       </div>
 
       {overlay === 'about' && <AboutModal onClose={() => setOverlay(null)} />}
+      {overlay === 'move-panel' && movePanelId !== null && (
+        <MovePanelModal
+          panelId={movePanelId}
+          onClose={() => {
+            setOverlay(null)
+            setMovePanelId(null)
+          }}
+        />
+      )}
     </div>
   )
 }

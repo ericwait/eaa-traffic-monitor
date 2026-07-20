@@ -38,6 +38,7 @@ function VideoLeafBody({ panelId, toggleMaximize }: VideoLeafBodyProps): React.J
   const feed = defaultFeeds.find((f) => f.id === feedId)
   const title = panelTitle(panelId)
   const fitMode = useAppStore((s) => s.videoFit[feedId] ?? 'fit')
+  const setVideoFit = useAppStore((s) => s.setVideoFit)
 
   const slotRef = useRef<HTMLDivElement | null>(null)
   const [slotSize, setSlotSize] = useState({ width: 0, height: 0 })
@@ -71,7 +72,15 @@ function VideoLeafBody({ panelId, toggleMaximize }: VideoLeafBodyProps): React.J
       <header className="panel-head leaf-frame-head" onDoubleClick={toggleMaximize}>
         <h2 className="panel-title">{title}</h2>
         <div className="panel-head-spacer" />
-        <PanelChromeButtons panelId={panelId} title={title} onPopOut={popOut} />
+        <PanelChromeButtons
+          panelId={panelId}
+          title={title}
+          onPopOut={popOut}
+          fit={{
+            mode: fitMode,
+            onToggle: () => setVideoFit(feedId, fitMode === 'fit' ? 'fill' : 'fit')
+          }}
+        />
       </header>
       <div className="panel-slot" ref={slotRef}>
         {feed && (

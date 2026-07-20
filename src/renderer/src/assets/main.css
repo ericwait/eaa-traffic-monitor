@@ -208,6 +208,17 @@ body {
   color: var(--accent);
 }
 
+/* The fit/fill toggle (video panels only — PanelChromeButtons' `fit` prop)
+   shows text ("Fit"/"Fill"), not a single glyph, so it needs more than the
+   24px square other chrome buttons get. */
+.panel-head-btn--fit {
+  width: auto;
+  padding: 0 0.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 /* A leaf's content region, below its header — relative + overflow:hidden so
    the video-fit stage (below) can be absolutely positioned inside it. */
 .panel-slot {
@@ -504,6 +515,73 @@ body {
 
 .modal-close:hover {
   filter: brightness(1.08);
+}
+
+/* ---------------------------------------------------------------------------
+   Move-panel modal (PR4 of the panel-system effort) — the accessible,
+   e2e-deterministic move path (layout/MovePanelModal.tsx); reuses the base
+   .modal/.modal-title/.modal-body/.modal-actions/.modal-close shell above.
+--------------------------------------------------------------------------- */
+.move-panel-modal {
+  width: min(420px, 100%);
+}
+
+.move-panel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+}
+
+.move-panel-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.move-panel-select {
+  height: 32px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
+.move-panel-select:hover {
+  border-color: var(--accent);
+}
+
+.move-panel-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  border: none;
+}
+
+.move-panel-zone {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.move-panel-cancel {
+  margin-right: 0.5rem;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.move-panel-cancel:hover {
+  filter: none;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* =============================================================================
