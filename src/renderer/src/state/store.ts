@@ -25,19 +25,22 @@ const INITIAL_NAV_STATE: Fr24NavState = {
 
 export type VideoLayoutMode = 'uniform' | 'emphasized'
 
+/** The overlays that can cover the FR24 region (each hides the native view). */
+export type OverlayKind = 'about' | 'add-channel'
+
 export interface AppState {
   /** Latest FR24 navigation state, mirrored from the main process. */
   navState: Fr24NavState
   /**
-   * True while a DOM overlay/modal is open over the FR24 region. Because the
-   * WebContentsView paints ABOVE all DOM, this flag drives fr24:setVisible(false)
-   * so the overlay is actually visible — the standing z-order pattern (see
-   * CLAUDE.md gotchas). Every future overlay that can cover the FR24 region must
-   * set this the same way.
+   * Which DOM overlay/modal is open over the FR24 region, or null. Because the
+   * WebContentsView paints ABOVE all DOM, a non-null value drives
+   * fr24:setVisible(false) so the overlay is actually visible — the standing
+   * z-order pattern (see CLAUDE.md gotchas). Every future overlay that can cover
+   * the FR24 region must register itself the same way.
    */
-  overlayOpen: boolean
+  overlay: OverlayKind | null
   setNavState: (navState: Fr24NavState) => void
-  setOverlayOpen: (overlayOpen: boolean) => void
+  setOverlay: (overlay: OverlayKind | null) => void
 
   // --- Audio slice (Phase 2a) ---------------------------------------------
   /** Per-stream UI state, keyed by stream id (see AudioStreamUi). */
@@ -66,8 +69,19 @@ export interface AppState {
    * (see audio/devices.ts) and prepended by the picker, so it is NOT in this list.
    */
   audioOutputs: AudioOutputDevice[]
+  /**
+   * The strip currently being drag-reordered, or null. Live UI state for the
+   * channel manager's drag: the dragged strip styles itself and the list
+   * previews the new order (audioOrder is rewritten during the drag, then
+   * committed — or reverted — on release; see audio/reorder.ts).
+   */
+  audioDragId: string | null
   /** Replace the whole stream set (engine build / rebuild). */
   initAudioStreams: (streams: AudioStreamUi[]) => void
+  /** Rewrite the display order only (drag preview; ids must match the set). */
+  setAudioOrder: (order: string[]) => void
+  /** Mark/unmark the strip being drag-reordered. */
+  setAudioDragId: (id: string | null) => void
   /** Shallow-merge a patch into one stream's UI state. */
   patchAudioStream: (id: string, patch: Partial<AudioStreamUi>) => void
   /** Set or clear the config fallback banner. */
@@ -125,9 +139,9 @@ export interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   navState: INITIAL_NAV_STATE,
-  overlayOpen: false,
+  overlay: null,
   setNavState: (navState) => set({ navState }),
-  setOverlayOpen: (overlayOpen) => set({ overlayOpen }),
+  setOverlay: (overlay) => set({ overlay }),
 
   audioStreams: {},
   audioOrder: [],
@@ -135,11 +149,14 @@ export const useAppStore = create<AppState>((set) => ({
   audioNeedsGesture: false,
   audioSolo: null,
   audioOutputs: [],
+  audioDragId: null,
   initAudioStreams: (streams) =>
     set({
       audioStreams: Object.fromEntries(streams.map((s) => [s.id, s])),
       audioOrder: streams.map((s) => s.id)
     }),
+  setAudioOrder: (audioOrder) => set({ audioOrder }),
+  setAudioDragId: (audioDragId) => set({ audioDragId }),
   patchAudioStream: (id, patch) =>
     set((state) => {
       const current = state.audioStreams[id]

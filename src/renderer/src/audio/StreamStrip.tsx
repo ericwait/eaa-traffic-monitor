@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../state/store'
 import type { AudioStreamStatus } from '../state/store'
 import { audioEngine } from './engine'
+import { beginStripDrag, moveStrip, STRIP_ID_ATTR } from './reorder'
 import { DEFAULT_DEVICE_ID, DEFAULT_DEVICE_LABEL } from './devices'
 
 // One ATC stream's control strip: label, priority rank, activity light, status
@@ -44,6 +45,7 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
   const stream = useAppStore((s) => s.audioStreams[id])
   const soloedId = useAppStore((s) => s.audioSolo)
   const outputs = useAppStore((s) => s.audioOutputs)
+  const dragId = useAppStore((s) => s.audioDragId)
 
   // Live countdown to the next retry — ticks only while actively reconnecting on
   // the fast schedule, so idle/disconnected strips never re-render on a timer.
@@ -118,11 +120,30 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
       data-status={status}
       data-soloed={isSoloed}
       data-soloed-elsewhere={soloedElsewhere}
+      data-dragging={dragId === id}
+      // The reorder drag's hit test maps DOM strips back to stream ids by this.
+      {...{ [STRIP_ID_ATTR]: id }}
       // Always present (cheap) so ducking is verifiable from the DOM even in a
       // production preview; the visible readout below is dev-only.
       data-duck-target={duckTarget}
     >
       <div className="stream-strip-top">
+        <button
+          type="button"
+          className="strip-grip"
+          data-testid={`grip-${id}`}
+          aria-label={`Reorder ${label} — arrow keys move it up or down`}
+          title="Drag to reorder — top of the list is the highest priority. Arrow keys move it too."
+          onPointerDown={(e) => beginStripDrag(id, e)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault()
+              moveStrip(id, e.key === 'ArrowUp' ? -1 : 1)
+            }
+          }}
+        >
+          ⠿
+        </button>
         <span
           className="activity-light"
           data-testid={`activity-light-${id}`}
@@ -151,6 +172,20 @@ function StreamStrip({ id }: { id: string }): React.JSX.Element | null {
           onClick={() => audioEngine.toggleConnected(id)}
         >
           {chipLabel(status, attempt)}
+        </button>
+        <button
+          type="button"
+          className="strip-remove"
+          data-testid={`remove-${id}`}
+          aria-label={`Remove ${label}`}
+          title="Remove this channel (it stays in LiveATC's directory — re-add it any time)"
+          onClick={() => {
+            void audioEngine.removeChannel(id).then((outcome) => {
+              if (!outcome.ok) console.error('[audio] remove failed:', outcome.error)
+            })
+          }}
+        >
+          &times;
         </button>
       </div>
 
