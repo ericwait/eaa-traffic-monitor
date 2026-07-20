@@ -48,9 +48,11 @@ The goal is an operator who sets up the exact view they want for a show — once
   Independent of the panel-tiling layout, each video feed's own panel has a simple display choice: fit the whole picture inside the panel (may letterbox) or fill the whole panel with the picture (may crop the edges).
   This is a per-feed, remembered preference — see [Video.md](Video.md) for the full video-panel behavior this sits alongside.
 
-- **Pop-outs stay outside the tiling — and combine through one explicit control.**
+- **Pop-outs stay outside the main window's tiling — but tile themselves the same way.**
   Sending a video feed to its own window (for a second monitor) removes it from the main tiling the same way closing a panel does, and it rejoins the main tiling in a sensible spot if that pop-out window is closed.
-  Two separate pop-out windows combine only through an explicit "merge into…" control naming the other window — never by dragging one window onto another, which the desktop platform this app runs on cannot reliably detect as a drop.
+  A pop-out is not a fixed grid, though: it tiles its own feeds with the exact same split, resize, drag-to-dock, maximize, and per-feed fit/fill mechanics described above, scoped to whichever feeds that window currently holds (decision 2026-07-20) — an operator running three feeds on a second monitor can arrange them into rows or columns exactly as freely as the main window's own panels, and reorganizing them never restarts a feed's stream.
+  Snap layouts are the one piece that stays main-window-only: a pop-out has no Layout Manager and no named profiles of its own, so its arrangement is simply whatever the operator last dragged it into, for as long as that window stays open.
+  Two separate pop-out windows combine only through an explicit "merge into…" control naming the other window — never by dragging one window onto another, which the desktop platform this app runs on cannot reliably detect as a drop — and a merge combines both windows' own arrangements into one, with the incoming feeds joining the target window's existing tiling rather than replacing it.
   See [Video.md](Video.md) § Pop-outs and restore for the full pop-out story.
 
 - **The whole arrangement restores on relaunch.**
@@ -76,5 +78,6 @@ The goal is an operator who sets up the exact view they want for a show — once
 - Switching between two saved layouts that both include a given video feed never restarts that feed's stream.
 - Maximizing a panel and pressing the restore shortcut brings back the exact prior arrangement.
 - Relaunching the app after an arrange-heavy session reproduces every panel's position, size, and open/closed state unattended.
+- Merging two pop-out windows combines both their arrangements — the incoming feeds join the target window's existing tiling rather than starting a fresh grid, and neither feed's stream restarts.
 
 These are the observable exit criteria for the layout system; see [../Implementation-Plan.md](../Implementation-Plan.md) for current status.
