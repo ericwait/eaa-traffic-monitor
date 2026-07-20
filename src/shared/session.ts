@@ -41,8 +41,6 @@ export function defaultSessionState(): SessionState {
     fr24: { lastUrl: null },
     audio: { devices: {}, streams: {} },
     window: null,
-    layout: {},
-    video: defaultVideoLayout(),
     panelLayout: null,
     popouts: [],
     theme: 'system'
@@ -181,8 +179,6 @@ export function sanitizeSessionState(raw: unknown): SessionState {
   base.audio.streams = sanitizeRecord(audio.streams, sanitizeStreamSettings)
 
   base.window = sanitizeWindowBounds(raw.window)
-  base.layout = sanitizeRecord(raw.layout, (v) => asString(v))
-  base.video = sanitizeVideoLayout(raw.video)
   // Old sessions (and any garbage/corrupt panelLayout) sanitize to null — the
   // caller substitutes buildDefaultTree; see panelLayout.ts's sanitizer doc.
   base.panelLayout = sanitizePanelLayoutSession(raw.panelLayout)
@@ -207,8 +203,7 @@ export function sanitizeSessionState(raw: unknown): SessionState {
  * - `audio.devices` / `audio.streams`: per-entry merge, where a `null` value for
  *   a key DELETES that entry (reset to the config/system default).
  * - `window`: replaced wholesale (null clears it).
- * - `layout`: entries merged into the map.
- * - `fr24` / `video`: shallow-merged / replaced.
+ * - `fr24`: shallow-merged.
  * - `panelLayout`: replaced wholesale, like `window` (undefined leaves it untouched, null clears it).
  */
 export function applySessionPatch(state: SessionState, patch: SessionPatch): SessionState {
@@ -219,8 +214,6 @@ export function applySessionPatch(state: SessionState, patch: SessionPatch): Ses
       streams: { ...state.audio.streams }
     },
     window: state.window ? { ...state.window } : null,
-    layout: { ...state.layout },
-    video: { ...state.video },
     panelLayout: state.panelLayout,
     popouts: state.popouts,
     theme: state.theme
@@ -243,8 +236,6 @@ export function applySessionPatch(state: SessionState, patch: SessionPatch): Ses
   }
 
   if (patch.window !== undefined) next.window = patch.window ? { ...patch.window } : null
-  if (patch.layout) next.layout = { ...next.layout, ...patch.layout }
-  if (patch.video) next.video = { ...patch.video }
   if (patch.panelLayout !== undefined) next.panelLayout = patch.panelLayout
   if (patch.theme) next.theme = patch.theme
 
