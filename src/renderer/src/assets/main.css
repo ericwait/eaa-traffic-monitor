@@ -765,6 +765,56 @@ body {
   text-align: center;
 }
 
+/* "Merge into…" control (combining two pop-outs into one — decision
+   2026-07-20, see docs/decisions/README.md). Hidden in fill-panel mode, same
+   as the rest of the pop-out's chrome — see PopoutApp.tsx. */
+.popout-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.merge-into {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.merge-into-label {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.merge-into-select {
+  height: 24px;
+  padding: 0 0.35rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.merge-into-select:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.merge-into-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.merge-into-error {
+  font-size: 0.68rem;
+  color: var(--color-danger);
+}
+
 /* ===========================================================================
    ATC Audio panel (Phase 2a) — appended section, self-contained.
    Colour tokens local to audio so the shared palette above is untouched.
