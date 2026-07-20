@@ -13,10 +13,25 @@ Versioning: SemVer, computed from git history — never hand-edited here.
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [0.2.0] - 2026-07-20
+
+Second alpha for EAA AirVenture 2026 — same not-yet-promoted status as 0.1.0
+(stream-source clearance is still pending; see the implementation plan's
+milestone notes). Adds dual-theme theming, in-app ATC channel management, and a
+fully modular panel layout.
 
 ### Added
 
+- Theme system: a Cream Classic (light) and Ember (dark) look, chosen from a
+  System / Cream / Ember toggle that follows the operating system by default
+  and is remembered across restarts. Switching retints every window — including
+  pop-outs — and the window chrome at once.
+- In-app channel management: add, remove, and reorder ATC channels without
+  leaving the app. An add-channel dialog lists an airport's LiveATC feeds (with
+  a bundled KOSH snapshot as a fallback when the directory can't be reached),
+  and the result is written to the still-hand-editable `config.json` and
+  applied live with no restart. A channel's priority is simply its position in
+  the list, set by drag or keyboard.
 - Modular panel layout: ATC audio, field weather, flight tracking, and every
   video feed are now independent, freely-arrangeable panels instead of three
   fixed columns. Panels split, resize, close, and reopen; a panel's header can
@@ -34,14 +49,25 @@ All notable changes to this project are documented in this file.
 - Maximize any panel to fill the window and restore it again; every other
   panel keeps running underneath (a video feed keeps playing, an unmuted ATC
   stream stays audible even while its panel is out of view).
-- The whole panel arrangement — layout, maximize state, per-feed fit/fill, and
-  named saved layouts — is part of full session restore.
+- Pop-out windows now carry the full panel canvas: split, resize, maximize, and
+  fit/fill feeds inside each pop-out, with its own layout remembered per window.
+  Pop-outs can be combined through a "Merge into…" control that moves their
+  feeds into a chosen window and closes the source.
+- The whole panel arrangement — layout, maximize state, per-feed fit/fill,
+  named saved layouts, per-window pop-out layouts, and the theme choice — is
+  part of full session restore.
 
 ### Changed
 
 - The panel layout is now built in-house (a serializable split tree rendered
   by a single canvas, with custom splitters) instead of on the
   `react-resizable-panels` library, which has been removed as a dependency.
+- The main window's uniform / emphasized / fill-panel video-grid modes are
+  retired in favor of the panel canvas, with per-feed fit/fill and per-panel
+  maximize taking their place.
+- The documentation site (wyvernwatch.org) is reskinned to match the app —
+  Cream / Ember theming and the app's own fonts — and its home page now leads
+  with a product overview and download links.
 
 ## [0.1.0] - 2026-07-19
 
