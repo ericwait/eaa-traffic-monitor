@@ -62,6 +62,13 @@ export class FeedPlayer {
   private readonly feedLabel: string
   private readonly videoId: string
   private readonly onStatusChange: (event: FeedPlayerStatusEvent) => void
+  /**
+   * The most recently requested iframe size (see setSize below) — recorded
+   * even before the underlying YT.Player exists so a size requested during the
+   * async loadYouTubeIframeApi()/construction window isn't lost; onReady
+   * applies it the moment the player is actually up.
+   */
+  private pendingSize: { width: number; height: number } | null = null
 
   constructor(element: HTMLElement, options: FeedPlayerOptions) {
     this.feedLabel = options.feedLabel
@@ -105,6 +112,13 @@ export class FeedPlayer {
       events: {
         onReady: () => {
           if (this.destroyed) return
+          // Apply a size requested while the player was still constructing —
+          // see setSize's doc comment. Read the just-assigned this.player
+          // directly rather than trusting a captured local (that's not how
+          // this init() body is written elsewhere either).
+          if (this.pendingSize) {
+            this.player?.setSize(this.pendingSize.width, this.pendingSize.height)
+          }
           this.onStatusChange({ status: 'playing' })
         },
         onStateChange: (event) => {
@@ -143,6 +157,40 @@ export class FeedPlayer {
         break
       default:
         break
+    }
+  }
+
+  /**
+   * Resize the underlying <iframe> to `width`x`height` CSS pixels. Required
+   * because YT.Player never tracks its container on its own — it renders at
+   * a fixed default (~640x390) size unless explicitly told otherwise, which
+   * is exactly the "fixed box anchored top-left" bug this fixes (see
+   * docs/Panel-System-Plan.md's Fix A / VideoTile.tsx's ResizeObserver, the
+   * caller of this method on every host-element size change).
+   *
+   * This is also how YouTube picks live-stream quality: it selects resolution
+   * from the player's own pixel dimensions (devicePixelRatio-aware
+   * internally), so requesting a larger size is also a request for a
+   * higher-resolution stream. Deliberately just CSS-pixel width/height, never
+   * a forced quality level — the deprecated setPlaybackQuality API does not
+   * apply to live streams anyway.
+   *
+   * Safe to call before the player exists yet (during the async
+   * loadYouTubeIframeApi()/construction window): the requested size is
+   * recorded and applied once onReady fires.
+   */
+  setSize(width: number, height: number): void {
+    if (this.destroyed) return
+    const w = Math.round(width)
+    const h = Math.round(height)
+    this.pendingSize = { width: w, height: h }
+    if (!this.player) return
+    try {
+      this.player.setSize(w, h)
+    } catch {
+      // Mirrors destroy()'s guard below: a torn-down contentWindow mid-
+      // navigation can throw here too; pendingSize above still lands if/when
+      // the player recovers, and the tile is otherwise unaffected.
     }
   }
 

@@ -84,6 +84,9 @@ function VideoTile({
   onPopOut,
   fitMode
 }: VideoTileProps): React.JSX.Element {
+  // STABLE outer element — see the Fix A ResizeObserver effect below for why
+  // this ref (not playerHostRef) is what gets observed.
+  const tileRef = useRef<HTMLDivElement | null>(null)
   const playerHostRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<FeedPlayer | null>(null)
   const [status, setStatus] = useState<FeedPlayerStatus>('loading')
@@ -122,6 +125,62 @@ function VideoTile({
       playerRef.current = null
     }
   }, [feed.label, feed.videoId])
+
+  // Fix A (docs/Panel-System-Plan.md): YT.Player renders at a fixed default
+  // size and never tracks its own container — left unattended it stays a
+  // ~640x390 box anchored top-left however big its panel grows (the
+  // LARGE-panel bug: a black L of empty space to the right/below, low
+  // resolution because YouTube picks stream quality from the player's own
+  // pixel size). FeedPlayer.setSize is the fix, but critically this observes
+  // `tileRef` (the OUTER, stable `.video-tile` element) rather than
+  // `playerHostRef` (the inner `.video-tile-player` div actually handed to
+  // `new YT.Player(...)`): the IFrame Player API's own docs say the
+  // constructor REPLACES that element with the <iframe> it creates (verified
+  // live — the resulting <iframe> inherits the original div's class, so
+  // `.video-tile-player` now names the IFRAME itself, not a wrapper around
+  // it). React never learns about that external DOM swap, so
+  // `playerHostRef.current` keeps pointing at the original, now-detached div
+  // forever — a ResizeObserver watching THAT stops firing the instant the
+  // swap happens, freezing the iframe at whatever size it first got. `.video-
+  // tile` (this component's own outermost element) is never touched by the
+  // YT API and is exactly the same size as the player host was designed to
+  // be (`.video-tile-player` is `position: absolute; inset: 0` inside it), so
+  // observing it keeps working across the replacement and every subsequent
+  // resize. CSS pixels throughout — YouTube's quality heuristic accounts for
+  // devicePixelRatio internally; never force a quality level here, live
+  // streams ignore the deprecated setPlaybackQuality anyway. Covers both the
+  // main-window canvas (LeafFrame's `.video-tile-stage`, resized by splitter
+  // drags/window resizes) and the pop-out grid, since both mount this same
+  // component.
+  useEffect(() => {
+    const el = tileRef.current
+    if (!el) return
+    const applySize = (): void => {
+      const { clientWidth, clientHeight } = el
+      if (clientWidth <= 0 || clientHeight <= 0) return
+      playerRef.current?.setSize(clientWidth, clientHeight)
+    }
+    applySize() // the tile may already be at its final size by the time this mounts
+    const ro = new ResizeObserver(applySize)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [feed.label, feed.videoId])
+
+  // Belt-and-suspenders: also (re-)apply the tile's current size the instant
+  // the player reports 'playing'. FeedPlayer.setSize already queues a
+  // pre-ready size request and replays it in onReady (see player.ts), so this
+  // is redundant in the common case — but it guards the ordering edge where
+  // this component's own ResizeObserver above fires before playerRef.current
+  // is assigned (a genuinely zero-size tile on first mount, or a fast
+  // reconnect) by re-reading the current size once the player is definitely up.
+  useEffect(() => {
+    if (status !== 'playing') return
+    const el = tileRef.current
+    if (!el) return
+    const { clientWidth, clientHeight } = el
+    if (clientWidth <= 0 || clientHeight <= 0) return
+    playerRef.current?.setSize(clientWidth, clientHeight)
+  }, [status])
 
   // Push restored volume/mute to the YouTube player once it first reaches
   // 'playing' (players always start muted for guaranteed autoplay, so a restored
@@ -178,6 +237,7 @@ function VideoTile({
 
   return (
     <div
+      ref={tileRef}
       className={[
         'video-tile',
         emphasized ? 'video-tile--emphasized' : '',
