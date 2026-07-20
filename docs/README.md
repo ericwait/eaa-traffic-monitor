@@ -1,3 +1,16 @@
+---
+# Renders this page through the advertisement template (the ad sits on top,
+# this documentation index renders below). README.md stays the resolvable,
+# plan-frozen docs index (decision 2026-07-20). Metadata only — the prose
+# below is unchanged.
+title: Airshow Traffic Monitor
+description: A cross-platform desktop dashboard that unifies live ATC audio, an airfield video grid, and FlightRadar24 tracking for airshows — built first for EAA AirVenture Oshkosh.
+template: home.html
+hide:
+  - navigation
+  - toc
+---
+
 # Documentation index
 
 > Status: living | Audience: everyone — start here | See also: [the product README](https://github.com/ericwait/airshow-traffic-monitor/blob/main/README.md) (product requirements), [Implementation-Plan.md](Implementation-Plan.md)

@@ -1,4 +1,4 @@
-> Status: v0.1.0 release act pending — every feature phase (through Phase 8) has shipped to `develop`; only the owner release act, and a small docs-site social/OG residual, remain | Audience: contributors and agents planning next work | See also: [docs index](README.md), [Audio design](design/Audio.md), [Video design](design/Video.md), [Tracking design](design/Tracking.md), [Layout design](design/Layout.md), [Tech stack](development/TechStack.md)
+> Status: v0.1.0 release act pending — every feature phase (through Phase 8) has shipped to `develop`; only the owner release act remains | Audience: contributors and agents planning next work | See also: [docs index](README.md), [Audio design](design/Audio.md), [Video design](design/Video.md), [Tracking design](design/Tracking.md), [Layout design](design/Layout.md), [Tech stack](development/TechStack.md)
 
 <!--
 PLAN-DOC LIFECYCLE — read before editing.
@@ -29,7 +29,7 @@ The compressed calendar (Sat Jul 18 → Wed Jul 22) is only reachable because th
 
 Two milestones are called out and are deliberately distinct: the **Monday show-open checkpoint** (a real-use gate, after Phase 2b — cleared) and the **Alpha release v0.1.0** (the tagged artifact).
 Every feature phase — including the post-alpha Phases 6 (brand skin), 7 (channel management), and 8 (panel system) — has now shipped to `develop`; see the Progress log.
-The only forward work left is the release act itself (see the Milestone section) plus the small docs-site social/OG residual in the Backlog.
+The only forward work left is the release act itself (see the Milestone section).
 
 ## Phase dependency graph
 
@@ -74,7 +74,6 @@ The v0.1.0 release is complete when:
      picked up; delete it from here in the same commit. -->
 
 - Contact LiveATC.net for stream-use clearance — the hard gate before any public promotion of the project.
-- Docs-site brand identity residual: wire the social/OG images and site favicon into the MkDocs config (the last unshipped slice of Phase 6; the site already points at wyvernwatch.org).
 - Live-stream auto-discovery polling.
 - Recording to disk.
 - Transcription / keyword alerts (local speech models on ducked buffers).
@@ -83,12 +82,14 @@ The v0.1.0 release is complete when:
 - Config hot-reload.
 - YouTube loopback-audio capture exploration.
 - Multiple simultaneous tracking panels.
+- Evaluate migrating the docs site to Zensical (the Material team's 1.x-compatible MkDocs successor) — MkDocs 2.0 removes plugins and rewrites theming with no migration path, so the toolchain is pinned to `mkdocs<2` for now (see TechStack § Known limitations).
 
 ## Progress log
 
 <!-- Append-only, reverse-chronological (newest at top). One terse line per
      completion — no adjectives, no narrative. -->
 
+- **2026-07-20** — Docs-site brand shipped, closing the last Phase 6 residual: the MkDocs site is skinned with the Wyvern Watch palette and bundled fonts, the home page is an advertisement (hero, app screenshots, three-pillar pitch, download CTAs to the latest release), and the favicon, logo, and OG social cards are wired in.
 - **2026-07-20** — Phase 8 (panel system) shipped across 6 PRs: a serializable split-tree canvas (single-container, id-sorted DOM order so rearranging never reloads a stream) replacing the hard-coded three-pillar layout — pure core (#33), canvas keystone + maximize (#34), video fill/resolution + shorter headers + bottom-row reopen (#35), close/reopen + Move-panel modal + native Layout/Panels menus + fit/fill toggle (#37), snap templates + named layout profiles (#38), header drag-to-dock + `react-resizable-panels` removed (#39).
 - **2026-07-20** — Pop-out windows can be combined via a "Merge into…" control (#36).
 - **2026-07-20** — Phase 6 brand skin shipped: Wyvern Watch tokens adopted (Cream Classic / Ember dual theme), bundled Barlow Semi Condensed + Inter woff2, persisted System/Cream/Ember toggle via `nativeTheme.themeSource` (#32).
