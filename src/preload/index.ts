@@ -6,6 +6,8 @@ import type {
   Fr24Bounds,
   Fr24NavAction,
   Fr24NavState,
+  LayoutCommand,
+  LayoutMenuSyncPayload,
   LiveAtcSearchResult,
   OpenPopoutRequest,
   PopoutPatch,
@@ -122,6 +124,19 @@ const api: AppApi = {
     },
     role: windowRole,
     popoutId
+  },
+  layout: {
+    syncMenu: (payload: LayoutMenuSyncPayload): void => {
+      ipcRenderer.send(IpcChannels.layoutMenuSync, payload)
+    },
+    onCommand: (listener: (command: LayoutCommand) => void): (() => void) => {
+      // Same wrap-and-unsubscribe shape as fr24.onNavState/weather.onUpdate —
+      // never leaks Electron's event object, and a StrictMode/HMR re-mount
+      // can't stack duplicate listeners.
+      const handler = (_event: unknown, command: LayoutCommand): void => listener(command)
+      ipcRenderer.on(IpcChannels.layoutCommand, handler)
+      return () => ipcRenderer.removeListener(IpcChannels.layoutCommand, handler)
+    }
   }
 }
 

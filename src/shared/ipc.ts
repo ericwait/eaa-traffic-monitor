@@ -13,7 +13,7 @@
 
 import type { AppConfig, StreamConfig } from './defaultConfig'
 import type { LiveAtcFeed } from './liveatcDirectory'
-import type { PanelLayoutSession } from './panelLayout'
+import type { PanelId, PanelLayoutSession } from './panelLayout'
 import type { WeatherMetar, WeatherTaf } from './weather'
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,19 @@ export const IpcChannels = {
    * open pop-out's window, then close this one — the "Merge into…" control
    * (decision 2026-07-20; see docs/design/Video.md § Pop-outs and restore).
    */
-  windowsMergePopout: 'windows:mergePopout'
+  windowsMergePopout: 'windows:mergePopout',
+  /**
+   * renderer -> main: the current panel set (open/closed + maximized), so the
+   * native application menu's Panels checkboxes render correct state (PR4 of
+   * the panel-system effort — see docs/Panel-System-Plan.md § File inventory).
+   * Sent on every panel-tree/maximize change, not just once at startup.
+   */
+  layoutMenuSync: 'layout:menuSync',
+  /**
+   * main -> renderer: forward a native-menu click (a Panels checkbox toggle,
+   * "Reset to Default Layout") for the renderer's store to act on.
+   */
+  layoutCommand: 'layout:command'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -352,6 +364,56 @@ export interface AppApi {
   liveatc: LiveAtcApi
   weather: WeatherApi
   windows: WindowsApi
+  layout: LayoutApi
+}
+
+// ---------------------------------------------------------------------------
+// Native-menu <-> panel-layout bridge payloads (PR4 of the panel-system
+// effort — see docs/Panel-System-Plan.md § File inventory / § PR slicing
+// item 4). The native application Menu (src/main/menu.ts) is the FR24-safe
+// surface for anything that must sit above the FR24 WebContentsView, which
+// paints above all DOM (CLAUDE.md gotcha); it renders a "Panels" checkbox per
+// panel id and a "Layout" menu ("Reset to Default Layout"). The renderer owns
+// the full panel universe (audio/weather/fr24 are fixed; the video feed set
+// comes from youtube/defaultFeeds.ts, which this shared module cannot import
+// — see @renderer/layout/panelMeta.ts's own doc comment), so it pushes the
+// current set + open/maximized state to main on every change; main renders the
+// checkboxes and forwards clicks back as commands rather than owning any panel
+// state itself.
+// ---------------------------------------------------------------------------
+
+/** One panel's menu-checkbox state, as sent by the renderer's menuBridge. */
+export interface LayoutMenuPanelEntry {
+  id: PanelId
+  /** The human title shown as the checkbox label (see @renderer/layout/panelMeta.ts's panelTitle). */
+  title: string
+  /** True when this panel is currently a leaf in the canvas tree (checkbox checked). */
+  open: boolean
+}
+
+/** The renderer -> main `layout:menuSync` payload. */
+export interface LayoutMenuSyncPayload {
+  /** Every panel the operator could toggle, in menu display order. */
+  panels: LayoutMenuPanelEntry[]
+  /** The currently maximized panel, or null — shown as a label suffix, not a separate control. */
+  maximizedPanelId: PanelId | null
+}
+
+/**
+ * A native-menu click, forwarded main -> renderer over `layout:command`. The
+ * Layout menu's snap-manager/named-profile items (`feature/layout-snaps`) will
+ * extend this union; `reset-layout` and `toggle-panel` are the PR4 surface.
+ */
+export type LayoutCommand = { type: 'toggle-panel'; id: PanelId } | { type: 'reset-layout' }
+
+export interface LayoutApi {
+  /** Push the current panel set + open/maximized state so the native menu can rebuild its checkboxes. */
+  syncMenu(payload: LayoutMenuSyncPayload): void
+  /**
+   * Subscribe to native-menu commands. Returns an unsubscribe function; call
+   * it on teardown so a re-mount (React StrictMode, HMR) never stacks listeners.
+   */
+  onCommand(listener: (command: LayoutCommand) => void): () => void
 }
 
 // ---------------------------------------------------------------------------
