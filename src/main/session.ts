@@ -3,6 +3,7 @@ import type { PopoutState, SessionPatch, SessionState } from '@shared/ipc'
 import {
   applySessionPatch,
   defaultSessionState,
+  mergePopouts as mergePopoutsState,
   patchPopout as patchPopoutState,
   removePopout as removePopoutState,
   sanitizeSessionState,
@@ -146,6 +147,19 @@ export function removePopout(id: number): void {
 export function patchPopout(id: number, patch: PopoutSlicePatch): void {
   current = patchPopoutState(load(), id, patch)
   scheduleFlush()
+}
+
+/**
+ * Merge `sourceId`'s pop-out into `targetId`'s (see @shared/session's
+ * `mergePopouts` for the math), then flush. Returns `false` — leaving the
+ * state untouched — when the ids are equal or either is unknown.
+ */
+export function mergePopouts(sourceId: number, targetId: number): boolean {
+  const merged = mergePopoutsState(load(), sourceId, targetId)
+  if (!merged) return false
+  current = merged
+  scheduleFlush()
+  return true
 }
 
 /** Convenience read: the persisted FR24 URL, or null if none/unavailable. */

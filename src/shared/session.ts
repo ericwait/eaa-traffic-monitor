@@ -280,6 +280,44 @@ export function patchPopout(
   }
 }
 
+/**
+ * Merge `sourceId`'s pop-out into `targetId`'s: `targetId` gains `sourceId`'s
+ * feed ids (deduplicated — a feed is only ever claimed by one pop-out, so this
+ * is defensive rather than expected) and per-feed volumes, and `sourceId`'s
+ * slice is dropped entirely. `targetId`'s own bounds/video layout are left
+ * untouched — only its feed set grows. Returns `null` (no-op) when the ids are
+ * equal or either is unknown, so the caller (src/main/popouts.ts) can decline
+ * to close a window or reload a renderer on a bad request.
+ *
+ * This is the "Merge into…" control's math (decision 2026-07-20; see
+ * docs/design/Video.md § Pop-outs and restore): an explicit in-window pick,
+ * never window-to-window drag. Pure so it is unit-testable without a
+ * BrowserWindow.
+ */
+export function mergePopouts(
+  state: SessionState,
+  sourceId: number,
+  targetId: number
+): SessionState | null {
+  if (sourceId === targetId) return null
+  const source = state.popouts.find((p) => p.id === sourceId)
+  const target = state.popouts.find((p) => p.id === targetId)
+  if (!source || !target) return null
+
+  const mergedTarget: PopoutState = {
+    ...target,
+    feedIds: [...new Set([...target.feedIds, ...source.feedIds])],
+    volumes: { ...target.volumes, ...source.volumes }
+  }
+
+  return {
+    ...state,
+    popouts: state.popouts
+      .filter((p) => p.id !== sourceId)
+      .map((p) => (p.id === targetId ? mergedTarget : p))
+  }
+}
+
 /** The next pop-out id: one past the current maximum (ids never reused within a run). */
 export function nextPopoutId(state: SessionState): number {
   return state.popouts.reduce((max, p) => Math.max(max, p.id), 0) + 1

@@ -312,6 +312,17 @@ export function registerGlobalIpc(
     popouts.patchPopout(id, narrowed)
   })
 
+  ipcMain.handle(
+    IpcChannels.windowsMergePopout,
+    (_e, sourceId: unknown, targetId: unknown): boolean => {
+      if (typeof sourceId !== 'number' || typeof targetId !== 'number') {
+        console.warn('[ipc] windows:mergePopout ignored — non-numeric ids:', sourceId, targetId)
+        return false
+      }
+      return popouts.mergePopout(sourceId, targetId)
+    }
+  )
+
   return () => {
     ipcMain.removeHandler(IpcChannels.sessionGet)
     ipcMain.removeAllListeners(IpcChannels.sessionPatch)
@@ -326,6 +337,7 @@ export function registerGlobalIpc(
     ipcMain.removeHandler(IpcChannels.windowsOpenPopout)
     ipcMain.removeAllListeners(IpcChannels.windowsClosePopout)
     ipcMain.removeAllListeners(IpcChannels.windowsPatchPopout)
+    ipcMain.removeHandler(IpcChannels.windowsMergePopout)
   }
 }
 
