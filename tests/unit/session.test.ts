@@ -47,6 +47,7 @@ describe('defaultSessionState', () => {
       window: null,
       layout: {},
       video: { mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null },
+      panelLayout: null,
       popouts: [],
       theme: 'system'
     })
@@ -130,6 +131,45 @@ describe('sanitizeSessionState', () => {
     expect(s.window).toEqual({ x: 5, y: 6, width: 700, height: 500, displayId: null })
   })
 
+  it('panelLayout is null when absent (every pre-existing session.json)', () => {
+    expect(sanitizeSessionState({}).panelLayout).toBeNull()
+  })
+
+  it('sanitizes a well-formed panelLayout section, leaving the legacy layout/video fields untouched', () => {
+    const s = sanitizeSessionState({
+      layout: { 'group:cols': '{"atc":22}' },
+      video: { mode: 'emphasized', emphasizedFeedId: 'warbirds', fillPanelFeedId: null },
+      panelLayout: {
+        tree: { type: 'leaf', id: 'fr24' },
+        maximizedPanelId: 'fr24',
+        videoFit: { warbirds: 'fill' },
+        profiles: []
+      }
+    })
+    expect(s.panelLayout).toEqual({
+      tree: { type: 'leaf', id: 'fr24' },
+      maximizedPanelId: 'fr24',
+      videoFit: { warbirds: 'fill' },
+      profiles: []
+    })
+    // The additive contract: legacy fields are still read/sanitized exactly as before.
+    expect(s.layout).toEqual({ 'group:cols': '{"atc":22}' })
+    expect(s.video).toEqual({
+      mode: 'emphasized',
+      emphasizedFeedId: 'warbirds',
+      fillPanelFeedId: null
+    })
+  })
+
+  it('a corrupt panelLayout sanitizes to null without disturbing any other section', () => {
+    const s = sanitizeSessionState({
+      fr24: { lastUrl: 'https://x' },
+      panelLayout: { tree: { type: 'nonsense' } }
+    })
+    expect(s.panelLayout).toBeNull()
+    expect(s.fr24.lastUrl).toBe('https://x')
+  })
+
   it('keeps a valid theme and defaults an absent/invalid one to system', () => {
     expect(sanitizeSessionState({ theme: 'light' }).theme).toBe('light')
     expect(sanitizeSessionState({ theme: 'dark' }).theme).toBe('dark')
@@ -200,6 +240,31 @@ describe('applySessionPatch', () => {
       emphasizedFeedId: 'x',
       fillPanelFeedId: null
     })
+  })
+
+  it('replaces panelLayout wholesale (whole-section replace, like window)', () => {
+    const section = {
+      tree: { type: 'leaf' as const, id: 'fr24' as const },
+      maximizedPanelId: null,
+      videoFit: {},
+      profiles: []
+    }
+    const state = applySessionPatch(defaultSessionState(), { panelLayout: section })
+    expect(state.panelLayout).toEqual(section)
+  })
+
+  it('clears panelLayout with an explicit null, but an absent key leaves it untouched', () => {
+    const section = {
+      tree: { type: 'leaf' as const, id: 'fr24' as const },
+      maximizedPanelId: null,
+      videoFit: {},
+      profiles: []
+    }
+    let state = applySessionPatch(defaultSessionState(), { panelLayout: section })
+    state = applySessionPatch(state, { fr24: { lastUrl: 'https://x' } }) // no panelLayout key at all
+    expect(state.panelLayout).toEqual(section)
+    state = applySessionPatch(state, { panelLayout: null })
+    expect(state.panelLayout).toBeNull()
   })
 
   it('replaces the theme and is a no-op when the patch omits it', () => {

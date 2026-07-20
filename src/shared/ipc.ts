@@ -13,6 +13,7 @@
 
 import type { AppConfig, StreamConfig } from './defaultConfig'
 import type { LiveAtcFeed } from './liveatcDirectory'
+import type { PanelLayoutSession } from './panelLayout'
 import type { WeatherMetar, WeatherTaf } from './weather'
 
 // ---------------------------------------------------------------------------
@@ -204,6 +205,15 @@ export interface SessionState {
   layout: Record<string, string>
   /** The main-window video grid layout. */
   video: VideoLayoutState
+  /**
+   * The panel-system split tree, maximize/fit state, and named profiles (see
+   * src/shared/panelLayout.ts). Additive alongside the legacy `layout`/`video`
+   * fields above (decision 2026-07-19; see docs/decisions/README.md) — those
+   * keep being read and written until the panel canvas replaces rrp (PR2 of
+   * the panel-layout-core effort). `null` before the first commit, and for
+   * every pre-existing session (an old build never wrote this key).
+   */
+  panelLayout: PanelLayoutSession | null
   /** Every open pop-out window (empty when none). */
   popouts: PopoutState[]
   /** The app theme selection (System/Cream/Ember); default 'system'. */
@@ -235,6 +245,8 @@ export interface SessionPatch {
   layout?: Record<string, string>
   /** Replace the whole main-window video layout. */
   video?: VideoLayoutState
+  /** Replace the whole panel-layout section (whole-section replace, like `window`); `null` clears it. */
+  panelLayout?: PanelLayoutSession | null
   /** Replace the app theme selection. Applied main-side via `theme:set`, not sent by the renderer through `session:patch` directly, but kept in the patch shape so the pure merge handles it uniformly. */
   theme?: ThemeMode
 }
