@@ -31,12 +31,7 @@ body,
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   overflow: hidden; /* the shell owns all layout; nothing scrolls the window */
 }
@@ -71,14 +66,19 @@ body {
 
 .app-brand {
   margin: 0;
+  font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 650;
   letter-spacing: 0.01em;
 }
 
+/* The "Phase N · …" status badge — the .label-caps treatment (display face,
+   uppercase, caps tracking), token colors only; text content untouched. */
 .app-badge {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
   font-size: 0.65rem;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
@@ -173,11 +173,14 @@ body {
   background: var(--panel-2);
 }
 
+/* Panel header — the .label-caps treatment from tokens.css (display face,
+   uppercase, caps tracking). */
 .panel-title {
   margin: 0;
+  font-family: var(--font-display);
   font-size: 0.72rem;
-  font-weight: 650;
-  letter-spacing: 0.09em;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -271,7 +274,7 @@ body {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--muted);
 }
@@ -732,7 +735,7 @@ body {
 .audio-banner-path {
   display: block;
   margin-top: 0.2rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.68rem;
   color: var(--muted);
   overflow: hidden;
@@ -961,6 +964,7 @@ body {
 /* Priority rank badge (Phase 2b) — small, muted; 1 = highest. */
 .priority-badge {
   flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -1033,7 +1037,8 @@ body {
 /* Dev-only duck-gain readout: lets ducking be SEEN without being heard. */
 .duck-readout {
   flex: 0 0 auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 0.62rem;
   color: var(--muted);
   padding: 0.05rem 0.3rem;
@@ -1112,6 +1117,7 @@ body {
 }
 
 .weather-age {
+  font-variant-numeric: tabular-nums;
   font-size: 0.68rem;
   color: var(--muted);
 }
@@ -1168,7 +1174,7 @@ body {
 .weather-raw {
   margin: 0;
   width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.64rem;
   line-height: 1.4;
   color: var(--muted);
@@ -1242,7 +1248,8 @@ body {
 .weather-taf-window {
   flex: 0 0 auto;
   min-width: 9ch;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
 
