@@ -18,6 +18,7 @@ import type {
   PopoutSummary,
   SessionPatch,
   SessionState,
+  ThemeMode,
   VideoLayoutState,
   WindowBoundsState
 } from './ipc'
@@ -41,7 +42,8 @@ export function defaultSessionState(): SessionState {
     window: null,
     layout: {},
     video: defaultVideoLayout(),
-    popouts: []
+    popouts: [],
+    theme: 'system'
   }
 }
 
@@ -116,6 +118,11 @@ function sanitizeWindowBounds(value: unknown): WindowBoundsState | null {
   return { x, y, width, height, displayId: displayId ?? null }
 }
 
+/** A bad/missing theme value degrades to 'system' rather than throwing. */
+function sanitizeTheme(value: unknown): ThemeMode {
+  return value === 'light' || value === 'dark' ? value : 'system'
+}
+
 function sanitizeVideoLayout(value: unknown): VideoLayoutState {
   if (!isObject(value)) return defaultVideoLayout()
   const mode = value.mode === 'emphasized' ? 'emphasized' : 'uniform'
@@ -179,6 +186,8 @@ export function sanitizeSessionState(raw: unknown): SessionState {
     ? raw.popouts.map(sanitizePopout).filter((p): p is PopoutState => p !== undefined)
     : []
 
+  base.theme = sanitizeTheme(raw.theme)
+
   return base
 }
 
@@ -206,7 +215,8 @@ export function applySessionPatch(state: SessionState, patch: SessionPatch): Ses
     window: state.window ? { ...state.window } : null,
     layout: { ...state.layout },
     video: { ...state.video },
-    popouts: state.popouts
+    popouts: state.popouts,
+    theme: state.theme
   }
 
   if (patch.fr24) next.fr24 = { ...next.fr24, ...patch.fr24 }
@@ -228,6 +238,7 @@ export function applySessionPatch(state: SessionState, patch: SessionPatch): Ses
   if (patch.window !== undefined) next.window = patch.window ? { ...patch.window } : null
   if (patch.layout) next.layout = { ...next.layout, ...patch.layout }
   if (patch.video) next.video = { ...patch.video }
+  if (patch.theme) next.theme = patch.theme
 
   return next
 }

@@ -1,0 +1,59 @@
+/* ============================================================================
+   Wyvern Watch bundled type — Barlow Semi Condensed (display) + Inter (body).
+   Committed woff2 files, latin subset, no CDN (offline-safe at the airfield —
+   decision 2026-07-19; see docs/WYVERN-RESKIN-PLAN.md Step 2 and
+   docs/decisions/README.md). Mono stays the system ui-monospace stack (no
+   bundled mono face) — see --font-mono in design/brand/tokens.css.
+
+   Weights match exactly what tokens.css's --font-display/--font-sans stacks
+   use: Barlow Semi Condensed 500/600/700, Inter 400/500/600. font-display:
+   swap so text never blocks invisibly on the font fetch.
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/barlow-semi-condensed-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/barlow-semi-condensed-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/barlow-semi-condensed-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/inter-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/inter-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/inter-600.woff2') format('woff2');
+}

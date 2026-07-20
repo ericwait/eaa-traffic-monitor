@@ -8,6 +8,21 @@ import {
   startPopoutFeedTracking,
   startVideoLayoutPersistence
 } from './state/sessionBootstrap'
+// Bundled woff2 @font-face declarations (Barlow Semi Condensed + Inter),
+// committed as binaries — no CDN, so the app stays usable offline at the
+// airfield (decision 2026-07-19; see docs/WYVERN-RESKIN-PLAN.md Step 2 and
+// docs/decisions/README.md). Loads before tokens.css so the font-family stacks
+// tokens.css declares resolve to these faces rather than the system fallback
+// on first paint.
+import './assets/fonts.css'
+// Canonical import of the Wyvern Watch design tokens straight from design/brand
+// — never copied into src/renderer — so there is exactly one source of truth for
+// the color/type/motion system. Vite bundles CSS imports at build time, so this
+// path outside the renderer root works in both dev and the packaged loopback
+// build (decision 2026-07-19; see docs/decisions/README.md and
+// docs/WYVERN-RESKIN-PLAN.md Step 1). Must load BEFORE main.css so main.css's
+// compatibility alias layer can re-point at the semantic --color-* variables.
+import '../../../design/brand/tokens.css'
 import './assets/main.css'
 
 // The persisted session is fetched once, before React mounts, so panel-layout

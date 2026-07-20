@@ -1,13 +1,29 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
+import type { ThemeMode } from '@shared/ipc'
 import Fr24Panel from './Fr24Panel'
 import AboutModal from './AboutModal'
 import VideoGrid from './VideoGrid'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
-import { layoutStorage } from '../state/sessionBootstrap'
+import { layoutStorage, sessionSnapshot } from '../state/sessionBootstrap'
 // The adaptive Wyvern Watch mark (Cream light / Ember dark), imported as a bundled
 // asset URL — never inlined as raw SVG — and rendered as a decorative <img>.
 import brandMark from '../../../../design/brand/svg/icon.svg'
+
+// Theme toggle (Wyvern Watch reskin, decision 2026-07-19): cycles System ->
+// Cream -> Ember -> System. The click sends theme.set to the main process,
+// which drives nativeTheme.themeSource — every window (main + pop-outs) and
+// the OS chrome pick it up with no per-window sync code here. Local state only
+// (no zustand slice) since this label is the only renderer-side consumer; the
+// initial value comes from the synchronous session snapshot (see
+// state/sessionBootstrap.ts), so it is correct on first paint, not just after
+// the round trip to main.
+const THEME_ORDER: readonly ThemeMode[] = ['system', 'light', 'dark']
+const THEME_LABEL: Record<ThemeMode, string> = { system: 'System', light: 'Cream', dark: 'Ember' }
+
+function nextTheme(current: ThemeMode): ThemeMode {
+  return THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length]
+}
 
 // The three-panel walking skeleton: ATC audio (left), flight tracking (top
 // right), live video (bottom right). ATC and video are placeholders that Phases
@@ -27,6 +43,18 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
   const setNavState = useAppStore((s) => s.setNavState)
   const overlay = useAppStore((s) => s.overlay)
   const setOverlay = useAppStore((s) => s.setOverlay)
+
+  // Seeded from the synchronous session snapshot (loaded before React mounts —
+  // see main.tsx) so the label is correct on first paint, not a flash of
+  // "System" while the async round trip settles.
+  const [theme, setTheme] = useState<ThemeMode>(() => sessionSnapshot().theme)
+  const cycleTheme = useCallback((): void => {
+    setTheme((current) => {
+      const next = nextTheme(current)
+      void window.api.theme.set(next)
+      return next
+    })
+  }, [])
 
   // Mirror FR24 nav-state pushes from main into the store. onNavState returns an
   // unsubscribe, so a StrictMode/HMR re-mount never stacks listeners.
@@ -61,6 +89,15 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
         <h1 className="app-brand">Airshow Traffic Monitor</h1>
         <span className="app-badge">Phase 1 · skeleton</span>
         <div className="app-header-spacer" />
+        <button
+          type="button"
+          className="theme-toggle-btn"
+          aria-label={`Theme: ${THEME_LABEL[theme]} — click to cycle System, Cream, Ember`}
+          title="Cycle theme (System / Cream / Ember)"
+          onClick={cycleTheme}
+        >
+          Theme: {THEME_LABEL[theme]}
+        </button>
         <button
           type="button"
           className="help-btn"
