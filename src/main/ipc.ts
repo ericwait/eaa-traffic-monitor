@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, nativeTheme } from 'electron'
 import type {
   Fr24Bounds,
   Fr24NavAction,
@@ -7,6 +7,7 @@ import type {
   PopoutPatch,
   ResolveStreamResult,
   SessionPatch,
+  ThemeMode,
   UpdateStreamsResult,
   VideoLayoutState,
   WeatherResult,
@@ -31,6 +32,12 @@ import type { WeatherPoller } from './weatherPoller'
 // Both narrow untrusted renderer payloads before acting on them.
 
 const NAV_ACTIONS: readonly Fr24NavAction[] = ['back', 'forward', 'reload', 'home']
+const THEME_MODES: readonly ThemeMode[] = ['system', 'light', 'dark']
+
+/** Narrow an untrusted renderer payload to a valid ThemeMode. */
+function isThemeMode(value: unknown): value is ThemeMode {
+  return typeof value === 'string' && THEME_MODES.includes(value as ThemeMode)
+}
 
 /** Narrow an untrusted renderer payload to Fr24Bounds (all four integer-ish). */
 function isBounds(value: unknown): value is Fr24Bounds {
@@ -120,6 +127,21 @@ export function registerGlobalIpc(
       return
     }
     patchSessionState(patch as SessionPatch)
+  })
+
+  // --- Theme (Wyvern Watch reskin) ----------------------------------------
+  // Drives nativeTheme.themeSource directly — every renderer's prefers-color-
+  // scheme (main window, every pop-out) and the OS window chrome follow this
+  // one setting at once, so there is no per-window sync code. Persisted the
+  // same way any other session field is (decision 2026-07-19; see
+  // docs/decisions/README.md and docs/WYVERN-RESKIN-PLAN.md Step 3).
+  ipcMain.handle(IpcChannels.themeSet, (_e, theme: unknown) => {
+    if (!isThemeMode(theme)) {
+      console.warn('[ipc] theme:set ignored — invalid theme mode:', theme)
+      return
+    }
+    nativeTheme.themeSource = theme
+    patchSessionState({ theme })
   })
 
   // --- Config (Phase 2a) --------------------------------------------------
@@ -293,6 +315,7 @@ export function registerGlobalIpc(
   return () => {
     ipcMain.removeHandler(IpcChannels.sessionGet)
     ipcMain.removeAllListeners(IpcChannels.sessionPatch)
+    ipcMain.removeHandler(IpcChannels.themeSet)
     ipcMain.removeHandler(IpcChannels.configGet)
     ipcMain.removeHandler(IpcChannels.configReload)
     ipcMain.removeHandler(IpcChannels.configUpdateStreams)

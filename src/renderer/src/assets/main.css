@@ -91,6 +91,29 @@ body {
   flex: 1 1 auto;
 }
 
+/* Cycles System -> Cream -> Ember -> System (see LayoutShell.tsx); the click
+   drives nativeTheme.themeSource in the main process, not a local CSS class. */
+.theme-toggle-btn {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.theme-toggle-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .help-btn {
   width: 28px;
   height: 28px;
