@@ -231,7 +231,9 @@ body {
 
 /* The fit/fill-computed rect (@shared/videoGeometry's computeAspectRect) a
    video panel's player is staged into — `.video-tile-player` (VideoTile.tsx)
-   keeps `inset: 0` within it, same as it fills a pop-out grid cell. */
+   keeps `inset: 0` within it. Identical in both windows' panel canvases
+   (decision 2026-07-20) — a pop-out's video leaf uses this exact same stage,
+   not a bespoke grid cell. */
 .video-tile-stage {
   position: absolute;
 }
@@ -833,33 +835,17 @@ body {
 
 /* =============================================================================
    PHASE 3 — Live Video (YouTube). Appended section; existing rules above are
-   untouched. `.video-grid` is now pop-out-only (PopoutApp.tsx) — the main
-   window renders one video panel per feed on the canvas (`.video-tile-stage`
-   above), not a grid; see src/renderer/src/components/VideoTile.tsx.
+   untouched. Both windows render one video panel per feed on their own panel
+   canvas (`.video-tile-stage` above) — pop-outs retired their old CSS-grid
+   `.video-grid` in favor of the same canvas the main window uses (decision
+   2026-07-20; see components/VideoLeafBody.tsx and PopoutApp.tsx).
 ============================================================================= */
-
-.video-grid {
-  height: 100%;
-  width: 100%;
-  display: grid;
-  gap: 4px;
-  padding: 4px;
-  min-height: 0;
-  min-width: 0;
-  background: var(--panel-2);
-}
-
-.video-grid--fill {
-  display: block;
-  padding: 0;
-  gap: 0;
-}
 
 .video-tile {
   position: relative;
-  /* Under a CSS grid cell (pop-out) this equals the default stretch; inside
-     `.video-tile-stage` (main-window canvas) it is required — that parent is
-     a plain absolutely-positioned box, not a grid item. */
+  /* Required — `.video-tile-stage` (both windows' panel canvas) is a plain
+     absolutely-positioned box, not a grid/flex parent that would stretch this
+     for free. */
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -878,17 +864,6 @@ body {
      see VideoTile.tsx and the .video-tile-controls comment below — but correct
      stacking against an overlaid iframe is worth keeping explicit regardless. */
   isolation: isolate;
-}
-
-.video-tile--emphasized {
-  border-color: var(--accent);
-}
-
-.video-tile--filled {
-  height: 100%;
-  width: 100%;
-  border-radius: 0;
-  border: none;
 }
 
 .video-tile-player {
@@ -1032,8 +1007,6 @@ body {
 }
 
 .video-tile-mute-btn,
-.video-tile-emphasize-btn,
-.video-tile-fill-btn,
 .video-tile-popout-btn {
   flex: 0 0 auto;
   width: 24px;
@@ -1051,8 +1024,6 @@ body {
 }
 
 .video-tile-mute-btn:hover,
-.video-tile-emphasize-btn:hover,
-.video-tile-fill-btn:hover,
 .video-tile-popout-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
@@ -1065,8 +1036,14 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Pop-out window (Phase 4). A grid-only window on a second/third monitor: the
-   video grid fills the whole window, no app chrome competing for space.
+   Pop-out window (Phase 4). A window on a second/third monitor hosting a
+   subset of feeds: the panel canvas fills the whole window below the
+   "Merge into…" toolbar, no other app chrome competing for space.
+   (decision 2026-07-20) The pop-out's own canvas is the SAME
+   PanelCanvas/LeafFrame the main window uses — see PopoutApp.tsx and
+   docs/design/Layout.md's pop-out section — so no bespoke grid CSS is needed
+   here beyond sizing the wrapper; `.panel-canvas`/`.leaf-frame`/etc. (above)
+   are shared as-is.
 --------------------------------------------------------------------------- */
 .popout-shell {
   height: 100%;
@@ -1077,9 +1054,10 @@ body {
   background: var(--bg);
 }
 
-.popout-shell .video-grid {
+.popout-canvas-wrap {
   flex: 1 1 auto;
   min-height: 0;
+  position: relative;
 }
 
 .popout-empty {

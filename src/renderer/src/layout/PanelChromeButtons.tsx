@@ -32,6 +32,12 @@ import { useLayoutController } from './LayoutController'
 // persistence already existed) flips `videoFit[feedId]` via the `fit` prop —
 // LeafFrame's `VideoLeafBody` is the only caller that passes it, since
 // fit/fill is not a concept for audio/weather/fr24.
+//
+// (decision 2026-07-20) Pop-out windows reuse this exact component (via
+// VideoLeafBody's `popout` prop) but pass `hideMove` — the Move-panel modal
+// and Layout Manager stay main-window-only there, so a pop-out leaf's chrome
+// is fit + maximize + close only (plus mute/volume, which live on VideoTile
+// itself, not here). See docs/design/Layout.md's pop-out section.
 
 interface PanelChromeButtonsProps {
   panelId: PanelId
@@ -40,13 +46,22 @@ interface PanelChromeButtonsProps {
   onPopOut?: () => void
   /** Present only for video panels — the current fit/fill mode + its toggle callback. */
   fit?: { mode: VideoFitMode; onToggle: () => void }
+  /**
+   * True only inside a pop-out window (decision 2026-07-20; see
+   * components/VideoLeafBody.tsx's `popout` prop): hides "Move panel…". The
+   * Move-panel modal and the Layout Manager stay main-window-only —
+   * header-drag-to-dock on the pop-out's own canvas is its reorg path
+   * instead. Default false (shown) for the main window's leaf chrome.
+   */
+  hideMove?: boolean
 }
 
 function PanelChromeButtons({
   panelId,
   title,
   onPopOut,
-  fit
+  fit,
+  hideMove = false
 }: PanelChromeButtonsProps): React.JSX.Element {
   const { maximizedPanelId, toggleMaximize, closePanel, openMovePanel } = useLayoutController()
   const isMaximized = maximizedPanelId === panelId
@@ -83,16 +98,18 @@ function PanelChromeButtons({
           {'⧉'}
         </button>
       )}
-      <button
-        type="button"
-        className="panel-head-btn"
-        data-testid={`leaf-move-${panelId}`}
-        aria-label={`Move ${title}…`}
-        title="Move panel… (choose a target panel + placement)"
-        onClick={() => openMovePanel(panelId)}
-      >
-        {'⇄'}
-      </button>
+      {!hideMove && (
+        <button
+          type="button"
+          className="panel-head-btn"
+          data-testid={`leaf-move-${panelId}`}
+          aria-label={`Move ${title}…`}
+          title="Move panel… (choose a target panel + placement)"
+          onClick={() => openMovePanel(panelId)}
+        >
+          {'⇄'}
+        </button>
+      )}
       <button
         type="button"
         className="panel-head-btn"
