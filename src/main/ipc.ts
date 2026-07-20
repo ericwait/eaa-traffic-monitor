@@ -2,6 +2,7 @@ import { ipcMain, nativeTheme } from 'electron'
 import type {
   Fr24Bounds,
   Fr24NavAction,
+  LayoutMenuSyncPayload,
   LiveAtcSearchResult,
   OpenPopoutRequest,
   PopoutPatch,
@@ -15,6 +16,7 @@ import type {
 } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
 import type { Fr24Controller } from './fr24'
+import type { LayoutMenuController } from './menu'
 import type { PopoutManager } from './popouts'
 import { getSessionState, patchSessionState } from './session'
 import { getConfig, reloadConfig, updateStreams } from './config'
@@ -89,6 +91,31 @@ function narrowOpenPopoutRequest(value: unknown): OpenPopoutRequest | null {
   const request: OpenPopoutRequest = { feedIds: v.feedIds, layout: v.layout }
   if (isWindowBounds(v.bounds)) request.bounds = v.bounds
   return request
+}
+
+/** Narrow an untrusted `layout:menuSync` payload; null when the shape is wrong. */
+function narrowLayoutMenuSync(value: unknown): LayoutMenuSyncPayload | null {
+  if (typeof value !== 'object' || value === null) return null
+  const v = value as Record<string, unknown>
+  if (!Array.isArray(v.panels)) return null
+  const panels: LayoutMenuSyncPayload['panels'] = []
+  for (const entry of v.panels) {
+    if (typeof entry !== 'object' || entry === null) return null
+    const e = entry as Record<string, unknown>
+    if (typeof e.id !== 'string' || e.id.length === 0) return null
+    if (typeof e.title !== 'string') return null
+    if (typeof e.open !== 'boolean') return null
+    panels.push({
+      id: e.id as LayoutMenuSyncPayload['panels'][number]['id'],
+      title: e.title,
+      open: e.open
+    })
+  }
+  const maximizedPanelId =
+    v.maximizedPanelId === null || typeof v.maximizedPanelId === 'string'
+      ? (v.maximizedPanelId as LayoutMenuSyncPayload['maximizedPanelId'])
+      : null
+  return { panels, maximizedPanelId }
 }
 
 /** Narrow a pop-out renderer's persist patch to the fields it is allowed to set. */
@@ -374,5 +401,27 @@ export function registerFr24Ipc(fr24: Fr24Controller): () => void {
     ipcMain.removeAllListeners(IpcChannels.fr24SetBounds)
     ipcMain.removeAllListeners(IpcChannels.fr24Nav)
     ipcMain.removeAllListeners(IpcChannels.fr24SetVisible)
+  }
+}
+
+/**
+ * Register the `layout:menuSync` listener for one main window's menu
+ * controller (src/main/menu.ts). Per-main-window, like registerFr24Ipc — the
+ * native application menu (and the panel canvas it reflects) belongs to the
+ * main window, not any pop-out. Returns a disposer that removes the listener
+ * so a window re-create never stacks duplicate registrations.
+ */
+export function registerLayoutMenuIpc(controller: LayoutMenuController): () => void {
+  ipcMain.on(IpcChannels.layoutMenuSync, (_e, payload: unknown) => {
+    const narrowed = narrowLayoutMenuSync(payload)
+    if (!narrowed) {
+      console.warn('[ipc] layout:menuSync ignored — malformed payload:', payload)
+      return
+    }
+    controller.handleMenuSync(narrowed)
+  })
+
+  return () => {
+    ipcMain.removeAllListeners(IpcChannels.layoutMenuSync)
   }
 }
