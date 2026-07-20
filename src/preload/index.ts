@@ -111,6 +111,8 @@ const api: AppApi = {
     patchPopout: (id: number, patch: PopoutPatch): void => {
       ipcRenderer.send(IpcChannels.windowsPatchPopout, id, patch)
     },
+    mergePopout: (sourceId: number, targetId: number): Promise<boolean> =>
+      ipcRenderer.invoke(IpcChannels.windowsMergePopout, sourceId, targetId),
     onPopoutsChanged: (listener: (popouts: PopoutSummary[]) => void): (() => void) => {
       // Wrap the caller's listener so Electron's event object never leaks into the
       // renderer, and return an unsubscribe that removes THIS wrapper.
