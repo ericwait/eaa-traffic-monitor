@@ -4,6 +4,7 @@ import { collectLeafIds } from '@shared/panelLayout'
 import AboutModal from './AboutModal'
 import PanelCanvas from '../layout/PanelCanvas'
 import MovePanelModal from '../layout/MovePanelModal'
+import LayoutManagerModal from '../layout/LayoutManagerModal'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
 import { sessionSnapshot } from '../state/sessionBootstrap'
 // The adaptive Wyvern Watch mark (Cream light / Ember dark), imported as a bundled
@@ -167,6 +168,7 @@ function LayoutShell(): React.JSX.Element {
           }}
         />
       )}
+      {overlay === 'layout-manager' && <LayoutManagerModal onClose={() => setOverlay(null)} />}
     </div>
   )
 }

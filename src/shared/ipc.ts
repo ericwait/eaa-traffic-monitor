@@ -373,7 +373,8 @@ export interface AppApi {
 // item 4). The native application Menu (src/main/menu.ts) is the FR24-safe
 // surface for anything that must sit above the FR24 WebContentsView, which
 // paints above all DOM (CLAUDE.md gotcha); it renders a "Panels" checkbox per
-// panel id and a "Layout" menu ("Reset to Default Layout"). The renderer owns
+// panel id and a "Layout" menu ("Reset to Default Layout", plus PR5's "Layout
+// Manager…" launcher and one radio item per saved profile). The renderer owns
 // the full panel universe (audio/weather/fr24 are fixed; the video feed set
 // comes from youtube/defaultFeeds.ts, which this shared module cannot import
 // — see @renderer/layout/panelMeta.ts's own doc comment), so it pushes the
@@ -397,14 +398,29 @@ export interface LayoutMenuSyncPayload {
   panels: LayoutMenuPanelEntry[]
   /** The currently maximized panel, or null — shown as a label suffix, not a separate control. */
   maximizedPanelId: PanelId | null
+  /**
+   * Saved-profile names, in `layoutProfiles` order (PR5 of the panel-system
+   * effort — see @shared/layoutProfiles.ts). This order IS the menu order and
+   * what `CmdOrCtrl+Alt+1..9` count against: `layout:command`'s `apply-profile`
+   * carries the entry's INDEX in this array, not its name (names can be
+   * renamed; the index is what `applyProfileByIndex` takes).
+   */
+  profiles: string[]
+  /** The name of the profile currently matching the canvas (for the radio-item checkmark), or null. */
+  activeProfileName: string | null
 }
 
 /**
- * A native-menu click, forwarded main -> renderer over `layout:command`. The
- * Layout menu's snap-manager/named-profile items (`feature/layout-snaps`) will
- * extend this union; `reset-layout` and `toggle-panel` are the PR4 surface.
+ * A native-menu click, forwarded main -> renderer over `layout:command`.
+ * `reset-layout` and `toggle-panel` are the PR4 surface; `open-layout-manager`
+ * and `apply-profile` (PR5) open LayoutManagerModal and apply a saved profile
+ * by its `layout:menuSync` `profiles` index, respectively.
  */
-export type LayoutCommand = { type: 'toggle-panel'; id: PanelId } | { type: 'reset-layout' }
+export type LayoutCommand =
+  | { type: 'toggle-panel'; id: PanelId }
+  | { type: 'reset-layout' }
+  | { type: 'open-layout-manager' }
+  | { type: 'apply-profile'; index: number }
 
 export interface LayoutApi {
   /** Push the current panel set + open/maximized state so the native menu can rebuild its checkboxes. */

@@ -54,4 +54,36 @@ describe('buildMenuSyncPayload', () => {
     const payload = buildMenuSyncPayload([], null)
     expect(payload.panels).toHaveLength(3 + defaultFeeds.length)
   })
+
+  // PR5 (feature/layout-snaps): the profile names + active-profile fields the
+  // Layout menu's radio items (src/main/menu.ts) render from.
+  it('defaults to an empty profile list and a null active profile when omitted', () => {
+    const payload = buildMenuSyncPayload([], null)
+    expect(payload.profiles).toEqual([])
+    expect(payload.activeProfileName).toBeNull()
+  })
+
+  it('carries the profile names through in order, and the active profile name unchanged', () => {
+    const payload = buildMenuSyncPayload(
+      [],
+      null,
+      new Set(),
+      ['Show Day', 'Quiet Morning'],
+      'Show Day'
+    )
+    expect(payload.profiles).toEqual(['Show Day', 'Quiet Morning'])
+    expect(payload.activeProfileName).toBe('Show Day')
+  })
+
+  it('a null active profile name (no saved profile currently matches the canvas) passes through as null', () => {
+    const payload = buildMenuSyncPayload([], null, new Set(), ['Show Day'], null)
+    expect(payload.activeProfileName).toBeNull()
+  })
+
+  it('does not alias the caller-supplied profile-names array', () => {
+    const names = ['Show Day']
+    const payload = buildMenuSyncPayload([], null, new Set(), names, null)
+    expect(payload.profiles).toEqual(names)
+    expect(payload.profiles).not.toBe(names)
+  })
 })

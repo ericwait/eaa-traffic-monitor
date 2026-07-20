@@ -584,6 +584,184 @@ body {
   color: var(--accent);
 }
 
+/* ---------------------------------------------------------------------------
+   Layout Manager modal (PR5 of the panel-system effort) — the template
+   gallery + zone assignment + named-profile CRUD
+   (layout/LayoutManagerModal.tsx); reuses the base .modal/.modal-title/
+   .modal-body/.modal-actions/.modal-close shell above, plus .move-panel-
+   field/.move-panel-label/.move-panel-select for the zone-assignment
+   dropdowns and the "save current as" field.
+--------------------------------------------------------------------------- */
+.layout-manager-modal {
+  width: min(760px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.layout-manager-section {
+  margin-bottom: 1.1rem;
+}
+
+.layout-manager-subtitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.template-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 128px;
+  padding: 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.template-card:hover {
+  border-color: var(--accent);
+}
+
+.template-card[data-selected='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* A tiny flex rendering of the template's own zone tree (ZonePreviewNode) —
+   orientation + proportional flex-grow per child, down to a colored leaf
+   swatch (.template-mini-zone). Purely decorative. */
+.template-mini-preview {
+  display: flex;
+  width: 100%;
+  height: 64px;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.template-mini-split {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 3px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.template-mini-child {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.template-mini-zone {
+  flex: 1 1 auto;
+  min-width: 4px;
+  min-height: 4px;
+  background: var(--accent);
+  opacity: 0.35;
+  border-radius: 2px;
+}
+
+.template-card-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.layout-manager-assign {
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.layout-manager-zone-field {
+  margin-bottom: 0.6rem;
+}
+
+.layout-manager-save-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.layout-manager-profile-name-input {
+  flex: 1 1 auto;
+}
+
+.layout-manager-profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.layout-manager-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+
+.layout-manager-profile-row[data-active='true'] {
+  border-color: var(--accent);
+}
+
+.layout-manager-profile-name {
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layout-manager-profile-active-badge {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.layout-manager-profile-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.35rem;
+}
+
+.layout-manager-profile-rename-form {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.layout-manager-profile-rename-input {
+  flex: 1 1 auto;
+  height: 30px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
 /* =============================================================================
    PHASE 3 — Live Video (YouTube). Appended section; existing rules above are
    untouched. `.video-grid` is now pop-out-only (PopoutApp.tsx) — the main
