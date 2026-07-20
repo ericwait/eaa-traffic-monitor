@@ -25,18 +25,20 @@ interface LayoutShellProps {
 
 function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
   const setNavState = useAppStore((s) => s.setNavState)
-  const overlayOpen = useAppStore((s) => s.overlayOpen)
-  const setOverlayOpen = useAppStore((s) => s.setOverlayOpen)
+  const overlay = useAppStore((s) => s.overlay)
+  const setOverlay = useAppStore((s) => s.setOverlay)
 
   // Mirror FR24 nav-state pushes from main into the store. onNavState returns an
   // unsubscribe, so a StrictMode/HMR re-mount never stacks listeners.
   useEffect(() => window.api.fr24.onNavState(setNavState), [setNavState])
 
   // The z-order rule: the FR24 WebContentsView paints above all DOM, so any DOM
-  // overlay must first hide it. Whenever overlayOpen flips, sync view visibility.
+  // overlay must first hide it. Whenever any overlay opens/closes, sync view
+  // visibility. (The Add-channel dialog renders inside AudioPanel but registers
+  // through the same store field, so it drives this effect too.)
   useEffect(() => {
-    window.api.fr24.setVisible(!overlayOpen)
-  }, [overlayOpen])
+    window.api.fr24.setVisible(overlay === null)
+  }, [overlay])
 
   // A divider drag changes panel sizes; nudge the FR24 region to re-measure so
   // its native bounds track the divider. onLayoutChange fires on every pointer
@@ -64,7 +66,7 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
           className="help-btn"
           aria-label="Help and About"
           title="Help / About"
-          onClick={() => setOverlayOpen(true)}
+          onClick={() => setOverlay('about')}
         >
           ?
         </button>
@@ -125,7 +127,7 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
         </Group>
       </div>
 
-      {overlayOpen && <AboutModal onClose={() => setOverlayOpen(false)} />}
+      {overlay === 'about' && <AboutModal onClose={() => setOverlay(null)} />}
     </div>
   )
 }

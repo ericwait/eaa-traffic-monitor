@@ -1224,3 +1224,238 @@ body {
   overflow: visible;
   text-overflow: unset;
 }
+
+/* =============================================================================
+   Channel manager — the "+" header button, the Add-channel dialog, and the
+   per-strip reorder/remove controls. See audio/AddChannelModal.tsx and
+   audio/StreamStrip.tsx.
+============================================================================= */
+
+/* The "+" add-channel button shares the reload button's chrome. */
+.audio-add-btn {
+  width: 26px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.audio-add-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The dialog is a taller, list-bearing modal; the results region scrolls. */
+.add-channel-modal {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  max-height: min(560px, 85vh);
+}
+
+.add-channel-search {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.add-channel-icao-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.add-channel-icao {
+  flex: 0 1 8rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 0.85rem;
+  text-transform: lowercase;
+}
+
+.add-channel-btn {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.add-channel-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.add-channel-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.add-channel-results {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.15rem 0;
+}
+
+.add-channel-feed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.add-channel-feed[data-added='true'] {
+  opacity: 0.55;
+}
+
+/* Feed status dot — same visual language as the strips' activity light.
+   'down' is the dark default; 'unknown' (bundled list) reads as a hollow dot. */
+.add-channel-status {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #263141;
+  border: 1px solid var(--line-strong);
+}
+
+.add-channel-status[data-status='up'] {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.add-channel-status[data-status='unknown'] {
+  background: transparent;
+  border-style: dashed;
+}
+
+.add-channel-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.add-channel-meta {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.add-channel-add {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.add-channel-add:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.add-channel-add:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.add-channel-note {
+  margin: 0.35rem 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.add-channel-error {
+  color: var(--warn);
+}
+
+/* Reorder grip — the strip's only drag surface (the rest of the strip is full
+   of controls that need their own pointer events). */
+.strip-grip {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none; /* pointer drag owns vertical gestures on the grip */
+}
+
+.strip-grip:hover,
+.strip-grip:focus-visible {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.stream-strip[data-dragging='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  opacity: 0.92;
+}
+
+.stream-strip[data-dragging='true'] .strip-grip {
+  cursor: grabbing;
+}
+
+/* Remove-channel button — quiet until hovered, then reads as destructive. */
+.strip-remove {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.strip-remove:hover,
+.strip-remove:focus-visible {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}

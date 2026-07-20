@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../state/store'
 import WeatherPanel from '../weather/WeatherPanel'
 import { audioEngine } from './engine'
+import AddChannelModal from './AddChannelModal'
 import StreamStrip from './StreamStrip'
 
 // The ATC Audio panel — the left pillar. Owns the panel header ("ATC Audio" +
@@ -21,6 +22,8 @@ function AudioPanel(): React.JSX.Element {
   const needsGesture = useAppStore((s) => s.audioNeedsGesture)
   const setBanner = useAppStore((s) => s.setAudioBanner)
   const soloId = useAppStore((s) => s.audioSolo)
+  const overlay = useAppStore((s) => s.overlay)
+  const setOverlay = useAppStore((s) => s.setOverlay)
 
   // Build + start the engine once. ensureStarted is StrictMode-safe and the
   // engine lives for the window's life, so there is deliberately no teardown on
@@ -46,6 +49,16 @@ function AudioPanel(): React.JSX.Element {
       <header className="panel-head audio-head">
         <h2 className="panel-title">ATC Audio</h2>
         <div className="audio-head-spacer" />
+        <button
+          type="button"
+          className="audio-add-btn"
+          data-testid="audio-add-channel"
+          aria-label="Add a channel from LiveATC"
+          title="Add a channel from LiveATC's directory"
+          onClick={() => setOverlay('add-channel')}
+        >
+          +
+        </button>
         <button
           type="button"
           className="audio-reload-btn"
@@ -93,6 +106,8 @@ function AudioPanel(): React.JSX.Element {
       </div>
 
       <WeatherPanel />
+
+      {overlay === 'add-channel' && <AddChannelModal onClose={() => setOverlay(null)} />}
     </section>
   )
 }

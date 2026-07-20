@@ -11,7 +11,8 @@
 // The one import is a TYPE-only pull of AppConfig from the (pure, zod-only)
 // config module, so the IPC payloads speak in the same validated shape.
 
-import type { AppConfig } from './defaultConfig'
+import type { AppConfig, StreamConfig } from './defaultConfig'
+import type { LiveAtcFeed } from './liveatcDirectory'
 import type { WeatherMetar, WeatherTaf } from './weather'
 
 // ---------------------------------------------------------------------------
@@ -35,6 +36,10 @@ export const IpcChannels = {
   configGet: 'config:get',
   /** renderer -> main (invoke): re-read config.json from disk (Phase 2a). */
   configReload: 'config:reload',
+  /** renderer -> main (invoke): replace the streams block of config.json (channel manager). */
+  configUpdateStreams: 'config:updateStreams',
+  /** renderer -> main (invoke): fetch + parse the LiveATC feed directory for one airport. */
+  liveatcSearch: 'liveatc:search',
   /** renderer -> main (invoke): resolve a stream id to a playable URL (Phase 2a). */
   audioResolveStream: 'audio:resolveStream',
   /** renderer -> main (invoke): read the current field-weather snapshot (cached, or a fresh fetch if stale). */
@@ -298,6 +303,7 @@ export interface AppApi {
   session: SessionApi
   config: ConfigApi
   audio: AudioApi
+  liveatc: LiveAtcApi
   weather: WeatherApi
   windows: WindowsApi
 }
@@ -328,6 +334,49 @@ export interface ConfigApi {
   get(): Promise<ConfigResult>
   /** Re-read config.json from disk (the "Reload config" button). */
   reload(): Promise<ConfigResult>
+  /**
+   * Replace the streams block of config.json (the channel manager's add /
+   * remove / reorder). The rest of the file — vad, ducking, weather, notes —
+   * is preserved, and the file stays hand-editable (decision 2026-07-19).
+   */
+  updateStreams(streams: StreamConfig[]): Promise<UpdateStreamsResult>
+}
+
+/**
+ * The outcome of `config:updateStreams`. On success the returned ConfigResult
+ * is the new active config (already cached main-side); on failure nothing was
+ * written and the previous config is still in force.
+ */
+export type UpdateStreamsResult = { ok: true; result: ConfigResult } | { ok: false; error: string }
+
+// ---------------------------------------------------------------------------
+// LiveATC directory payloads (channel manager). The search page is fetched in
+// the main process (browser UA — see CLAUDE.md) and parsed by the pure shared
+// parser; a fetch/parse failure is a typed result, never a throw across IPC.
+// ---------------------------------------------------------------------------
+
+/** The outcome of `liveatc:search`. */
+export type LiveAtcSearchResult =
+  | {
+      ok: true
+      icao: string
+      feeds: LiveAtcFeed[]
+      fetchedAt: number
+      /**
+       * 'live' when the feeds came from LiveATC just now (or its short cache);
+       * 'bundled' when the live search failed and these are the compiled-in
+       * KOSH snapshot (see shared/koshFallback.ts) — the dialog says so.
+       */
+      source: 'live' | 'bundled'
+    }
+  | { ok: false; icao: string; kind: ResolveFailureKind; error: string }
+
+export interface LiveAtcApi {
+  /**
+   * Fetch + parse the LiveATC feed directory for one airport query (e.g.
+   * "osh"). Cached main-side; pass `{ fresh: true }` to force a re-fetch.
+   */
+  search(icao: string, opts?: { fresh?: boolean }): Promise<LiveAtcSearchResult>
 }
 
 // ---------------------------------------------------------------------------

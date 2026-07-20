@@ -2,10 +2,12 @@ import { ipcMain } from 'electron'
 import type {
   Fr24Bounds,
   Fr24NavAction,
+  LiveAtcSearchResult,
   OpenPopoutRequest,
   PopoutPatch,
   ResolveStreamResult,
   SessionPatch,
+  UpdateStreamsResult,
   VideoLayoutState,
   WeatherResult,
   WindowBoundsState
@@ -14,7 +16,8 @@ import { IpcChannels } from '@shared/ipc'
 import type { Fr24Controller } from './fr24'
 import type { PopoutManager } from './popouts'
 import { getSessionState, patchSessionState } from './session'
-import { getConfig, reloadConfig } from './config'
+import { getConfig, reloadConfig, updateStreams } from './config'
+import { searchLiveAtc } from './liveatcDirectory'
 import { clearResolveCache, resolveStream } from './plsResolver'
 import { clearWeatherCache, getWeather, refreshWeather } from './weather'
 import type { WeatherPoller } from './weatherPoller'
@@ -135,6 +138,61 @@ export function registerGlobalIpc(
     return result
   })
 
+  // --- Channel manager ------------------------------------------------------
+  // updateStreams validates main-side (zod + unique ids/priorities) and writes
+  // config.json atomically; a failure is a typed result and nothing changes.
+  // On success: removed streams lose their resolve-cache entries and their
+  // persisted session overrides (device routing, volume/mute/pan), so a future
+  // stream reusing the id starts clean.
+  ipcMain.handle(IpcChannels.configUpdateStreams, (_e, streams: unknown): UpdateStreamsResult => {
+    const beforeIds = getConfig().config.streams.map((s) => s.id)
+    const outcome = updateStreams(streams)
+    if (!outcome.ok) return outcome
+
+    const nextIds = new Set(outcome.result.config.streams.map((s) => s.id))
+    const removed = beforeIds.filter((id) => !nextIds.has(id))
+    // A reorder can also change nothing but priorities; plsUrls may have changed
+    // for kept ids too (hand edits merged through the UI path are impossible
+    // today, but clearing the whole cache is cheap and always correct).
+    clearResolveCache()
+    if (removed.length > 0) {
+      const nulls = <T>(): Record<string, T | null> =>
+        Object.fromEntries(removed.map((id) => [id, null]))
+      patchSessionState({ audio: { devices: nulls(), streams: nulls() } })
+    }
+    return outcome
+  })
+
+  ipcMain.handle(
+    IpcChannels.liveatcSearch,
+    async (_e, icao: unknown, opts: unknown): Promise<LiveAtcSearchResult> => {
+      if (typeof icao !== 'string' || icao.length === 0) {
+        return {
+          ok: false,
+          icao: String(icao),
+          kind: 'unknown',
+          error: 'liveatc:search called without a station code'
+        }
+      }
+      const fresh =
+        typeof opts === 'object' && opts !== null && (opts as { fresh?: unknown }).fresh === true
+      try {
+        return await searchLiveAtc(icao, { fresh })
+      } catch (err: unknown) {
+        // Defensive: searchLiveAtc is written not to throw, but IPC must never
+        // reject — a rejection would reach the renderer as an opaque error.
+        return {
+          ok: false,
+          icao,
+          kind: 'unknown',
+          error: `unexpected error searching LiveATC: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        }
+      }
+    }
+  )
+
   // --- Audio (Phase 2a) ---------------------------------------------------
   // resolveStream returns a typed success/failure — never throws across IPC —
   // so a bad mount surfaces as a status chip, not an unhandled rejection.
@@ -237,6 +295,8 @@ export function registerGlobalIpc(
     ipcMain.removeAllListeners(IpcChannels.sessionPatch)
     ipcMain.removeHandler(IpcChannels.configGet)
     ipcMain.removeHandler(IpcChannels.configReload)
+    ipcMain.removeHandler(IpcChannels.configUpdateStreams)
+    ipcMain.removeHandler(IpcChannels.liveatcSearch)
     ipcMain.removeHandler(IpcChannels.audioResolveStream)
     ipcMain.removeHandler(IpcChannels.weatherGet)
     ipcMain.removeHandler(IpcChannels.weatherRefresh)

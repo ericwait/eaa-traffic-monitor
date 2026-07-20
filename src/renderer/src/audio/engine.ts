@@ -1,4 +1,5 @@
 import type { ConfigResult } from '@shared/ipc'
+import type { LiveAtcFeed } from '@shared/liveatcDirectory'
 import { Vad } from './vad'
 import { StreamPlayer } from './streamPlayer'
 import type { StreamPlayerState, StreamPlayerStatus } from './streamPlayer'
@@ -13,7 +14,7 @@ import {
   DEFAULT_DEVICE_LABEL
 } from './devices'
 import type { AudioDeviceSelection } from '@shared/ipc'
-import type { StreamConfig } from '@shared/defaultConfig'
+import type { StreamConfig, VadConfig } from '@shared/defaultConfig'
 import { useAppStore } from '../state/store'
 import type { AudioStreamUi, AudioStreamStatus } from '../state/store'
 import { sessionSnapshot } from '../state/sessionBootstrap'
@@ -129,45 +130,7 @@ class AudioEngine {
     const savedStreams = sessionSnapshot().audio.streams
 
     for (const stream of config.streams) {
-      const saved = savedStreams[stream.id]
-      const volume = clamp01(saved?.volume ?? stream.defaultVolume)
-      const muted = saved?.muted ?? stream.muted
-      const pan = clampPan(saved?.pan ?? stream.pan)
-      const effective: StreamConfig = { ...stream, defaultVolume: volume, muted, pan }
-
-      this.vads.set(stream.id, new Vad(config.vad))
-      this.lastActive.set(stream.id, false)
-      this.priorities.set(stream.id, stream.priority)
-      this.mutedState.set(stream.id, muted)
-      this.duckTargets.set(stream.id, 1)
-
-      const player = new StreamPlayer({
-        stream: effective,
-        fftSize: config.vad.fftSize,
-        resolve: (id, opts) => window.api.audio.resolveStream(id, opts),
-        onStatus: (status) => this.onPlayerStatus(stream.id, status),
-        fastReconnect: isE2E,
-        autoPlay: !isE2E
-      })
-      this.players.set(stream.id, player)
-
-      uiList.push({
-        id: stream.id,
-        label: stream.label,
-        status: 'disconnected',
-        attempt: 0,
-        active: false,
-        volume,
-        muted,
-        pan,
-        priority: stream.priority,
-        lastError: null,
-        nextRetryAt: null,
-        duckTarget: 1,
-        deviceId: DEFAULT_DEVICE_ID,
-        deviceLabel: DEFAULT_DEVICE_LABEL,
-        deviceNotice: null
-      })
+      uiList.push(this.createStream(stream, config.vad, isE2E, savedStreams[stream.id]))
     }
 
     const store = useAppStore.getState()
@@ -195,6 +158,76 @@ class AudioEngine {
     // for hot plug/unplug. Fire-and-forget: audio plays on the default output
     // while this resolves, so a slow enumerate never blocks startup.
     void this.initDevices()
+  }
+
+  /**
+   * Create one stream's player + VAD + engine bookkeeping and return its initial
+   * UI entry. Shared by the initial build (which merges saved session settings
+   * over the config defaults) and a live add from the channel manager (no saved
+   * settings — a brand-new stream starts on its config defaults, disconnected).
+   */
+  private createStream(
+    stream: StreamConfig,
+    vadConfig: VadConfig,
+    isE2E: boolean,
+    saved?: { volume?: number; muted?: boolean; pan?: number }
+  ): AudioStreamUi {
+    const volume = clamp01(saved?.volume ?? stream.defaultVolume)
+    const muted = saved?.muted ?? stream.muted
+    const pan = clampPan(saved?.pan ?? stream.pan)
+    const effective: StreamConfig = { ...stream, defaultVolume: volume, muted, pan }
+
+    this.vads.set(stream.id, new Vad(vadConfig))
+    this.lastActive.set(stream.id, false)
+    this.priorities.set(stream.id, stream.priority)
+    this.mutedState.set(stream.id, muted)
+    this.duckTargets.set(stream.id, 1)
+
+    const player = new StreamPlayer({
+      stream: effective,
+      fftSize: vadConfig.fftSize,
+      resolve: (id, opts) => window.api.audio.resolveStream(id, opts),
+      onStatus: (status) => this.onPlayerStatus(stream.id, status),
+      fastReconnect: isE2E,
+      autoPlay: !isE2E
+    })
+    this.players.set(stream.id, player)
+
+    return {
+      id: stream.id,
+      label: stream.label,
+      status: 'disconnected',
+      attempt: 0,
+      active: false,
+      volume,
+      muted,
+      pan,
+      priority: stream.priority,
+      lastError: null,
+      nextRetryAt: null,
+      duckTarget: 1,
+      deviceId: DEFAULT_DEVICE_ID,
+      deviceLabel: DEFAULT_DEVICE_LABEL,
+      deviceNotice: null
+    }
+  }
+
+  /**
+   * Tear down one stream completely: cancel any pending restore, release its
+   * solo if held, destroy the player (closes the AudioContext), and drop every
+   * per-stream map entry so a future stream reusing the id starts clean.
+   */
+  private destroyStream(id: string): void {
+    this.cancelRestore(id)
+    if (this.soloId === id) this.setSolo(null)
+    this.players.get(id)?.destroy()
+    this.players.delete(id)
+    this.vads.delete(id)
+    this.lastActive.delete(id)
+    this.priorities.delete(id)
+    this.mutedState.delete(id)
+    this.duckTargets.delete(id)
+    this.desiredDevices.delete(id)
   }
 
   private tick(): void {
@@ -562,20 +595,125 @@ class AudioEngine {
       })
     }
 
-    // Priorities / mutes / duck level may all have changed — re-derive the mix.
-    this.recomputeDucking()
+    // Hand edits can also add or remove streams — apply that live too (the same
+    // path the channel manager uses), then re-derive the mix.
+    this.applyStreams(result)
+  }
 
-    // Adding/removing streams needs a rebuild — out of scope for a live reload
-    // (stream-management UI is post-alpha). Name it rather than silently ignore.
-    const nextIds = new Set(result.config.streams.map((s) => s.id))
-    const added = [...nextIds].filter((id) => !this.players.has(id))
-    const removed = [...this.players.keys()].filter((id) => !nextIds.has(id))
-    if (added.length || removed.length) {
-      console.warn(
-        `[audio] config reload changed the stream set (added: ${added.join(', ') || 'none'}; ` +
-          `removed: ${removed.join(', ') || 'none'}). Restart the app to apply add/remove.`
-      )
+  // --- Channel manager (add / remove / reorder) -----------------------------
+
+  /**
+   * Reconcile the live engine against a new config's stream set: build players
+   * for added streams (they start disconnected — on-demand contract), destroy
+   * removed ones, adopt new labels/priorities, and rewrite the store's list in
+   * the new order. Kept streams keep their LIVE volume/mute/pan — a reorder or
+   * an add never resets the operator's working mix.
+   */
+  applyStreams(result: ConfigResult): void {
+    const { config } = result
+    const isE2E = window.api.audio.isE2E
+
+    const nextIds = new Set(config.streams.map((s) => s.id))
+    for (const id of [...this.players.keys()]) {
+      if (!nextIds.has(id)) this.destroyStream(id)
     }
+
+    const uiList: AudioStreamUi[] = []
+    for (const stream of config.streams) {
+      const existing = useAppStore.getState().audioStreams[stream.id]
+      if (this.players.has(stream.id) && existing) {
+        this.priorities.set(stream.id, stream.priority)
+        uiList.push({ ...existing, label: stream.label, priority: stream.priority })
+      } else {
+        uiList.push(this.createStream(stream, config.vad, isE2E))
+      }
+    }
+
+    useAppStore.getState().initAudioStreams(uiList)
+    this.recomputeDucking()
+  }
+
+  /**
+   * Persist a new streams array through config:updateStreams and, on success,
+   * apply it live. Returns the typed outcome so the UI can surface a failure
+   * (nothing changed main-side on failure).
+   */
+  private async commitStreams(streams: StreamConfig[]): Promise<{ ok: boolean; error?: string }> {
+    let outcome: Awaited<ReturnType<typeof window.api.config.updateStreams>>
+    try {
+      outcome = await window.api.config.updateStreams(streams)
+    } catch (err: unknown) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+    if (!outcome.ok) return { ok: false, error: outcome.error }
+    this.applyStreams(outcome.result)
+    return { ok: true }
+  }
+
+  /** The active config's streams, sorted by priority (the canonical order). */
+  private async configStreams(): Promise<StreamConfig[]> {
+    const result = await window.api.config.get()
+    return [...result.config.streams].sort((a, b) => a.priority - b.priority)
+  }
+
+  /**
+   * Add a LiveATC feed as a new channel at the LOWEST priority (bottom of the
+   * list) with neutral defaults: centre pan, 0.8 volume, unmuted, disconnected.
+   * The id derives from the feed's mount (unique on LiveATC and stable), with a
+   * numeric suffix in the unlikely case a hand-authored id already took it.
+   */
+  async addChannel(feed: LiveAtcFeed): Promise<{ ok: boolean; error?: string }> {
+    const streams = await this.configStreams()
+
+    if (streams.some((s) => s.plsUrl === feed.plsUrl)) {
+      return { ok: false, error: `"${feed.name}" is already a channel` }
+    }
+
+    const taken = new Set(streams.map((s) => s.id))
+    let id = feed.mount
+    for (let n = 2; taken.has(id); n += 1) id = `${feed.mount}-${n}`
+
+    const maxPriority = streams.reduce((max, s) => Math.max(max, s.priority), 0)
+    const added: StreamConfig = {
+      id,
+      label: feed.name,
+      plsUrl: feed.plsUrl,
+      priority: maxPriority + 1,
+      pan: 0,
+      defaultVolume: 0.8,
+      muted: false
+    }
+    return this.commitStreams([...streams, added])
+  }
+
+  /** Remove a channel and renumber the remaining priorities contiguously (1..N). */
+  async removeChannel(id: string): Promise<{ ok: boolean; error?: string }> {
+    const streams = await this.configStreams()
+    const remaining = streams.filter((s) => s.id !== id)
+    if (remaining.length === streams.length) {
+      return { ok: false, error: `no channel with id "${id}"` }
+    }
+    if (remaining.length === 0) {
+      // The config schema requires at least one stream; a bare panel would also
+      // leave nothing to click at the show. Refuse the last delete.
+      return { ok: false, error: 'cannot remove the last channel' }
+    }
+    return this.commitStreams(remaining.map((s, i) => ({ ...s, priority: i + 1 })))
+  }
+
+  /**
+   * Reorder channels to match `orderedIds` (top of the list = priority 1). Ids
+   * not present in the config are ignored; config streams missing from the list
+   * keep their relative order at the end. No-ops (same order) still write —
+   * callers only invoke this after an actual move.
+   */
+  async reorderChannels(orderedIds: string[]): Promise<{ ok: boolean; error?: string }> {
+    const streams = await this.configStreams()
+    const byId = new Map(streams.map((s) => [s.id, s]))
+    const picked = orderedIds.map((id) => byId.get(id)).filter((s): s is StreamConfig => !!s)
+    const leftover = streams.filter((s) => !orderedIds.includes(s.id))
+    const next = [...picked, ...leftover].map((s, i) => ({ ...s, priority: i + 1 }))
+    return this.commitStreams(next)
   }
 
   private bannerFor(result: ConfigResult): { message: string; filePath: string } | null {

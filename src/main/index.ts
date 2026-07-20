@@ -33,6 +33,15 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
+// E2E isolation: the Playwright suites exercise flows that WRITE to userData
+// (the channel manager rewrites config.json; session.json persists constantly),
+// so the harness points the app at a throwaway directory rather than mutating
+// the operator's real profile. Must run before app `ready` (userData is read
+// lazily but early); ignored entirely outside the harness.
+if (process.env.E2E_USERDATA) {
+  app.setPath('userData', process.env.E2E_USERDATA)
+}
+
 let mainWindow: BrowserWindow | null = null
 let fr24: Fr24Controller | null = null
 let weatherPoller: WeatherPoller | null = null
