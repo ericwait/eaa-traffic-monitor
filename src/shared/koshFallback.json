@@ -1,0 +1,283 @@
+{
+  "streams": [
+    {
+      "id": "kosh9_boss",
+      "label": "Air Boss 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh9_boss.pls",
+      "priority": 2,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_ab",
+      "label": "Air Boss 2",
+      "plsUrl": "https://www.liveatc.net/play/kosh_ab.pls",
+      "priority": 3,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh6",
+      "label": "Arrival ATIS",
+      "plsUrl": "https://www.liveatc.net/play/kosh6.pls",
+      "priority": 29,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_arr_atis",
+      "label": "Arrival ATIS 2",
+      "plsUrl": "https://www.liveatc.net/play/kosh_arr_atis.pls",
+      "priority": 30,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_fbo",
+      "label": "Basler FBO",
+      "plsUrl": "https://www.liveatc.net/play/kosh_fbo.pls",
+      "priority": 28,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_dep_atis",
+      "label": "Departure ATIS",
+      "plsUrl": "https://www.liveatc.net/play/kosh_dep_atis.pls",
+      "priority": 31,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_depmon_0927",
+      "label": "Departure Monitor (09/27) 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh_depmon_0927.pls",
+      "priority": 18,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh9_depmon_0927",
+      "label": "Departure Monitor (09/27) 2",
+      "plsUrl": "https://www.liveatc.net/play/kosh9_depmon_0927.pls",
+      "priority": 19,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_depmon_1836",
+      "label": "Departure Monitor (18/36) 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh_depmon_1836.pls",
+      "priority": 20,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh9_depmon_1836",
+      "label": "Departure Monitor (18/36) 2",
+      "plsUrl": "https://www.liveatc.net/play/kosh9_depmon_1836.pls",
+      "priority": 21,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_depmon2",
+      "label": "Departure Monitor (All)",
+      "plsUrl": "https://www.liveatc.net/play/kosh_depmon2.pls",
+      "priority": 17,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_guard",
+      "label": "Emergency/Guard",
+      "plsUrl": "https://www.liveatc.net/play/kosh_guard.pls",
+      "priority": 1,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh8_fisk",
+      "label": "Fisk VFR Approach 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh8_fisk.pls",
+      "priority": 12,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_s_fisk",
+      "label": "Fisk VFR Approach 2",
+      "plsUrl": "https://www.liveatc.net/play/kosh_s_fisk.pls",
+      "priority": 13,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_n_fisk3",
+      "label": "Fisk VFR Approach 4",
+      "plsUrl": "https://www.liveatc.net/play/kosh_n_fisk3.pls",
+      "priority": 14,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_perm",
+      "label": "Gnd/Twr/App 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh_perm.pls",
+      "priority": 15,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_gbr",
+      "label": "Green Bay Radio",
+      "plsUrl": "https://www.liveatc.net/play/kosh_gbr.pls",
+      "priority": 23,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_gbr2",
+      "label": "Green Bay Radio 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh_gbr2.pls",
+      "priority": 24,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh9_gnd",
+      "label": "Ground 3",
+      "plsUrl": "https://www.liveatc.net/play/kosh9_gnd.pls",
+      "priority": 16,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh",
+      "label": "North Tower (09/27) 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh.pls",
+      "priority": 6,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_s_twr1",
+      "label": "North Tower (09/27) 2",
+      "plsUrl": "https://www.liveatc.net/play/kosh_s_twr1.pls",
+      "priority": 7,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh9_twr_n",
+      "label": "North Tower (09/27) 3",
+      "plsUrl": "https://www.liveatc.net/play/kosh9_twr_n.pls",
+      "priority": 8,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh2",
+      "label": "South Tower (18/36) 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh2.pls",
+      "priority": 9,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_s_twr2",
+      "label": "South Tower (18/36) 2",
+      "plsUrl": "https://www.liveatc.net/play/kosh_s_twr2.pls",
+      "priority": 10,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh9_twr_s",
+      "label": "South Tower (18/36) 3",
+      "plsUrl": "https://www.liveatc.net/play/kosh9_twr_s.pls",
+      "priority": 11,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_twr",
+      "label": "Tower (North+South) 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh_twr.pls",
+      "priority": 4,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh9_twr",
+      "label": "Tower (North+South) 3",
+      "plsUrl": "https://www.liveatc.net/play/kosh9_twr.pls",
+      "priority": 5,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_wb1",
+      "label": "Warbird Area",
+      "plsUrl": "https://www.liveatc.net/play/kosh_wb1.pls",
+      "priority": 25,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_spb",
+      "label": "Seaplane",
+      "plsUrl": "https://www.liveatc.net/play/kosh_spb.pls",
+      "priority": 26,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "kosh_spb1",
+      "label": "Seaplane 1",
+      "plsUrl": "https://www.liveatc.net/play/kosh_spb1.pls",
+      "priority": 27,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    },
+    {
+      "id": "zau_osh",
+      "label": "ZAU Chicago Center (Lone Rock, Low)",
+      "plsUrl": "https://www.liveatc.net/play/zau_osh.pls",
+      "priority": 22,
+      "pan": 0.0,
+      "defaultVolume": 1.0,
+      "muted": true
+    }
+  ]
+}
