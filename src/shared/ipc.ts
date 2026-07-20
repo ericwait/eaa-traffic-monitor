@@ -198,20 +198,16 @@ export interface SessionState {
   /** Main-window bounds + display, or null before the first save. */
   window: WindowBoundsState | null
   /**
-   * Resizable panel layout, keyed by the react-resizable-panels storage key. The
-   * values are the library's own serialized layout strings — the renderer wires a
-   * `LayoutStorage` adapter over this map, so the app never parses them itself.
-   */
-  layout: Record<string, string>
-  /** The main-window video grid layout. */
-  video: VideoLayoutState
-  /**
    * The panel-system split tree, maximize/fit state, and named profiles (see
-   * src/shared/panelLayout.ts). Additive alongside the legacy `layout`/`video`
-   * fields above (decision 2026-07-19; see docs/decisions/README.md) — those
-   * keep being read and written until the panel canvas replaces rrp (PR2 of
-   * the panel-layout-core effort). `null` before the first commit, and for
-   * every pre-existing session (an old build never wrote this key).
+   * src/shared/panelLayout.ts), rendered by the single-container canvas
+   * (decision 2026-07-19; see docs/decisions/README.md). `null` before the
+   * first commit, and for every pre-existing session — an old build wrote the
+   * now-removed `layout` (react-resizable-panels' own `LayoutStorage` strings)
+   * and top-level `video` (VideoLayoutState) fields instead; migration is
+   * drop-and-default, so those keys simply stop being read/written and an old
+   * session.json loads with `panelLayout: null` (the caller substitutes
+   * `buildDefaultTree`). Downgrading to a pre-panel-canvas build is safe but
+   * loses this section.
    */
   panelLayout: PanelLayoutSession | null
   /** Every open pop-out window (empty when none). */
@@ -241,10 +237,6 @@ export interface SessionPatch {
   }
   /** Replace the whole main-window bounds record (or clear it with null). */
   window?: WindowBoundsState | null
-  /** Merge these panel-layout entries into the stored map. */
-  layout?: Record<string, string>
-  /** Replace the whole main-window video layout. */
-  video?: VideoLayoutState
   /** Replace the whole panel-layout section (whole-section replace, like `window`); `null` clears it. */
   panelLayout?: PanelLayoutSession | null
   /** Replace the app theme selection. Applied main-side via `theme:set`, not sent by the renderer through `session:patch` directly, but kept in the patch shape so the pure merge handles it uniformly. */

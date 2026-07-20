@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeMode } from '@shared/ipc'
-import Fr24Panel from './Fr24Panel'
+import { collectLeafIds } from '@shared/panelLayout'
 import AboutModal from './AboutModal'
-import VideoGrid from './VideoGrid'
+import PanelCanvas from '../layout/PanelCanvas'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
-import { layoutStorage, sessionSnapshot } from '../state/sessionBootstrap'
+import { sessionSnapshot } from '../state/sessionBootstrap'
 // The adaptive Wyvern Watch mark (Cream light / Ember dark), imported as a bundled
 // asset URL — never inlined as raw SVG — and rendered as a decorative <img>.
 import brandMark from '../../../../design/brand/svg/icon.svg'
@@ -25,24 +24,23 @@ function nextTheme(current: ThemeMode): ThemeMode {
   return THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length]
 }
 
-// The three-panel walking skeleton: ATC audio (left), flight tracking (top
-// right), live video (bottom right). ATC and video are placeholders that Phases
-// 2 and 3 fill; the flight-tracking panel is real — a native FR24 browser view
-// tracked gap-free to a resizable DOM region, the foundational layout risk this
-// phase de-risks.
+// The app shell: a header (brand mark, theme toggle, About) plus the panel
+// canvas — a single absolutely-positioned region hosting every open panel
+// (ATC audio, field weather, FR24, one per video feed), replacing the old
+// hard-coded react-resizable-panels Group/Panel/Separator tree (see
+// docs/Panel-System-Plan.md). Panel content composition (which component a
+// panel id mounts) lives in layout/LeafFrame.tsx, not here — this file only
+// owns the header and the cross-cutting FR24 visibility rule.
 
-// The ATC (left) panel content is injected as a slot so the audio pillar can be
-// composed in from App without this shell importing it — keeps the audio and
-// video tracks' edits to disjoint regions of this file. Defaults to the Phase 1
-// placeholder when no slot is provided.
-interface LayoutShellProps {
-  atcSlot?: React.ReactNode
-}
-
-function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
+function LayoutShell(): React.JSX.Element {
   const setNavState = useAppStore((s) => s.setNavState)
   const overlay = useAppStore((s) => s.overlay)
   const setOverlay = useAppStore((s) => s.setOverlay)
+  const panelTree = useAppStore((s) => s.panelTree)
+  const layoutRevision = useAppStore((s) => s.layoutRevision)
+  const maximizedPanelId = useAppStore((s) => s.maximizedPanelId)
+  const dragPanelId = useAppStore((s) => s.dragPanelId)
+  const toggleMaximize = useAppStore((s) => s.toggleMaximize)
 
   // Seeded from the synchronous session snapshot (loaded before React mounts —
   // see main.tsx) so the label is correct on first paint, not a flash of
@@ -60,30 +58,73 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
   // unsubscribe, so a StrictMode/HMR re-mount never stacks listeners.
   useEffect(() => window.api.fr24.onNavState(setNavState), [setNavState])
 
-  // The z-order rule: the FR24 WebContentsView paints above all DOM, so any DOM
-  // overlay must first hide it. Whenever any overlay opens/closes, sync view
-  // visibility. (The Add-channel dialog renders inside AudioPanel but registers
-  // through the same store field, so it drives this effect too.)
+  // Escape restores a maximized panel from anywhere in the window (mirrors the
+  // existing solo/fill-panel Escape patterns in AudioPanel/VideoGrid).
   useEffect(() => {
-    window.api.fr24.setVisible(overlay === null)
-  }, [overlay])
+    if (maximizedPanelId === null) return
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') toggleMaximize(maximizedPanelId)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [maximizedPanelId, toggleMaximize])
 
-  // A divider drag changes panel sizes; nudge the FR24 region to re-measure so
-  // its native bounds track the divider. onLayoutChange fires on every pointer
-  // move during the drag (the rAF throttle in Fr24Panel collapses the storm).
-  const emitRelayout = useCallback((): void => {
+  // Consolidated FR24 visibility rule (LOAD-BEARING INVARIANT, decision
+  // 2026-07-19; see docs/Panel-System-Plan.md § Store slice) — replaces the
+  // old overlay-only effect. The native WebContentsView paints ABOVE all DOM,
+  // so it must be hidden whenever ANY of these hold: its leaf isn't in the
+  // tree at all (closed), a DOM overlay/modal is open, a header-drag is in
+  // progress (dragPanelId; wired now for feature/panel-drag-dock), or some
+  // OTHER panel is maximized.
+  const fr24Visible = useMemo(
+    () =>
+      collectLeafIds(panelTree).includes('fr24') &&
+      overlay === null &&
+      dragPanelId === null &&
+      (maximizedPanelId === null || maximizedPanelId === 'fr24'),
+    [panelTree, overlay, dragPanelId, maximizedPanelId]
+  )
+
+  // Single-writer sequencing: a hide transition applies immediately (the
+  // native view eats pointer events, so hiding it promptly is required, not
+  // cosmetic). A hidden -> visible transition waits TWO rAF ticks after
+  // whatever just changed the layout, so Fr24Panel's own ResizeObserver-driven
+  // `fr24:setBounds` (reacting to the very same commit) lands first — without
+  // this, reappearing could show one frame at stale bounds. Initialized to
+  // `false` so a fr24Visible-true first mount also takes this path (there is
+  // no prior bounds report on mount either).
+  const prevFr24VisibleRef = useRef(false)
+  useEffect(() => {
+    if (fr24Visible === prevFr24VisibleRef.current) return
+    prevFr24VisibleRef.current = fr24Visible
+
+    if (!fr24Visible) {
+      window.api.fr24.setVisible(false)
+      return undefined
+    }
+
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        window.api.fr24.setVisible(true)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [fr24Visible])
+
+  // A structural tree commit (a settled splitter drag; a future open/close/
+  // move/snap) nudges FR24 to re-measure. Fr24Panel's own rAF-throttled
+  // ResizeObserver/listener does the actual work; Splitter also dispatches
+  // this event live during a drag (layout/Splitter.tsx), not just on commit.
+  useEffect(() => {
     window.dispatchEvent(new Event(FR24_RELAYOUT_EVENT))
-  }, [])
-
-  // Persist + restore each resizable group's sizes through the session-backed
-  // storage adapter (Phase 4). `defaultLayout` seeds the group from the saved
-  // sizes (undefined on first run → the panels' own defaultSize); `onLayoutChanged`
-  // fires on pointer release, not during the drag, so it saves the settled layout.
-  const cols = useDefaultLayout({ id: 'cols', storage: layoutStorage })
-  const rows = useDefaultLayout({ id: 'rows', storage: layoutStorage })
+  }, [layoutRevision])
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-fr24-hidden={fr24Visible ? undefined : 'true'}>
       <header className="app-header">
         <img className="app-brand-mark" src={brandMark} alt="" aria-hidden="true" />
         <h1 className="app-brand">Airshow Traffic Monitor</h1>
@@ -110,58 +151,7 @@ function LayoutShell({ atcSlot }: LayoutShellProps): React.JSX.Element {
       </header>
 
       <div className="app-body">
-        <Group
-          id="cols"
-          orientation="horizontal"
-          className="layout-group"
-          defaultLayout={cols.defaultLayout}
-          onLayoutChange={emitRelayout}
-          onLayoutChanged={cols.onLayoutChanged}
-        >
-          <Panel id="atc" className="panel atc-panel" defaultSize="22" minSize="14">
-            {atcSlot ?? (
-              <section className="placeholder" aria-label="ATC Audio">
-                <header className="panel-head">
-                  <h2 className="panel-title">ATC Audio</h2>
-                </header>
-                <div className="placeholder-body">
-                  <p className="placeholder-note">
-                    Simultaneous LiveATC streams with per-stream volume, mute, and activity lights
-                    land here in Phase 2a.
-                  </p>
-                </div>
-              </section>
-            )}
-          </Panel>
-
-          <Separator className="separator separator-vertical" />
-
-          <Panel id="right" className="panel" defaultSize="78" minSize="40">
-            <Group
-              id="rows"
-              orientation="vertical"
-              className="layout-group"
-              defaultLayout={rows.defaultLayout}
-              onLayoutChange={emitRelayout}
-              onLayoutChanged={rows.onLayoutChanged}
-            >
-              <Panel id="fr24" className="panel" defaultSize="62" minSize="25">
-                <Fr24Panel />
-              </Panel>
-
-              <Separator className="separator separator-horizontal" />
-
-              <Panel id="video" className="panel video-panel" defaultSize="38" minSize="12">
-                <section className="video-panel-section" aria-label="Live Video">
-                  <header className="panel-head">
-                    <h2 className="panel-title">Live Video</h2>
-                  </header>
-                  <VideoGrid />
-                </section>
-              </Panel>
-            </Group>
-          </Panel>
-        </Group>
+        <PanelCanvas />
       </div>
 
       {overlay === 'about' && <AboutModal onClose={() => setOverlay(null)} />}

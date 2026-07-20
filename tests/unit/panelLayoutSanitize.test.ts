@@ -182,10 +182,14 @@ describe('sanitizePanelLayoutSession', () => {
     expect(result).toBeNull()
   })
 
-  it('a legacy (pre-panel-layout) session fixture sanitizes to panelLayout: null, with every other section intact', () => {
-    // What a session.json written by an older build actually looks like: no
-    // `panelLayout` key at all. Run it through the FULL session sanitizer
-    // (not just this module) so "everything else intact" is actually checked.
+  it('a legacy (pre-panel-canvas) session fixture sanitizes to panelLayout: null, with every surviving section intact', () => {
+    // What a session.json written by an older (pre-PR2) build actually looks
+    // like: `layout` (react-resizable-panels' own LayoutStorage strings) and a
+    // top-level `video` (VideoLayoutState), and no `panelLayout` key at all.
+    // Migration is drop-and-default (see @shared/ipc's SessionState.panelLayout
+    // doc): those two legacy keys are simply no longer read, rather than
+    // crashing the sanitizer. Run it through the FULL session sanitizer (not
+    // just this module) so "everything else intact" is actually checked.
     const legacyFixture = {
       fr24: { lastUrl: 'https://www.flightradar24.com/x' },
       audio: { devices: { tower: { deviceId: 'abc', deviceLabel: 'Headphones' } }, streams: {} },
@@ -200,9 +204,10 @@ describe('sanitizePanelLayoutSession', () => {
     expect(result.fr24).toEqual(legacyFixture.fr24)
     expect(result.audio).toEqual(legacyFixture.audio)
     expect(result.window).toEqual(legacyFixture.window)
-    expect(result.layout).toEqual(legacyFixture.layout)
-    expect(result.video).toEqual(legacyFixture.video)
     expect(result.popouts).toEqual(legacyFixture.popouts)
+    // The removed legacy keys are gone from the sanitized shape, not carried through.
+    expect(result).not.toHaveProperty('layout')
+    expect(result).not.toHaveProperty('video')
   })
 
   it('keeps a well-formed session fully intact', () => {

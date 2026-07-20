@@ -45,8 +45,6 @@ describe('defaultSessionState', () => {
       fr24: { lastUrl: null },
       audio: { devices: {}, streams: {} },
       window: null,
-      layout: {},
-      video: { mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null },
       panelLayout: null,
       popouts: [],
       theme: 'system'
@@ -77,8 +75,6 @@ describe('sanitizeSessionState', () => {
         }
       },
       window: { x: 10, y: 20, width: 1280, height: 800, displayId: 2 },
-      layout: { 'group:main': '{"atc":22}', bad: 5 },
-      video: { mode: 'emphasized', emphasizedFeedId: 'warbirds', fillPanelFeedId: null },
       popouts: [
         { id: 1, bounds: bounds(100, 100), feedIds: ['warbirds'], video: {}, volumes: {} },
         { id: 2 } // no bounds → dropped
@@ -89,23 +85,15 @@ describe('sanitizeSessionState', () => {
     expect(s.audio.devices).toEqual({ tower: { deviceId: 'abc', deviceLabel: 'Headphones' } })
     expect(s.audio.streams).toEqual({ tower: { volume: 0.5, muted: true, pan: -0.3 }, gnd: {} })
     expect(s.window).toEqual({ x: 10, y: 20, width: 1280, height: 800, displayId: 2 })
-    expect(s.layout).toEqual({ 'group:main': '{"atc":22}' })
-    expect(s.video).toEqual({
-      mode: 'emphasized',
-      emphasizedFeedId: 'warbirds',
-      fillPanelFeedId: null
-    })
     expect(s.popouts).toHaveLength(1)
     expect(s.popouts[0].id).toBe(1)
   })
 
-  it('clamps out-of-range volumes/pans and defaults a bad video mode', () => {
+  it('clamps out-of-range volumes/pans', () => {
     const s = sanitizeSessionState({
-      audio: { streams: { a: { volume: 5, pan: -9 } } },
-      video: { mode: 'wild', emphasizedFeedId: 42 }
+      audio: { streams: { a: { volume: 5, pan: -9 } } }
     })
     expect(s.audio.streams.a).toEqual({ volume: 1, pan: -1 })
-    expect(s.video).toEqual({ mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null })
   })
 
   it('keeps a boolean connected flag (on-demand set) and drops a non-boolean one', () => {
@@ -135,10 +123,9 @@ describe('sanitizeSessionState', () => {
     expect(sanitizeSessionState({}).panelLayout).toBeNull()
   })
 
-  it('sanitizes a well-formed panelLayout section, leaving the legacy layout/video fields untouched', () => {
+  it('sanitizes a well-formed panelLayout section, leaving the other sections untouched', () => {
     const s = sanitizeSessionState({
-      layout: { 'group:cols': '{"atc":22}' },
-      video: { mode: 'emphasized', emphasizedFeedId: 'warbirds', fillPanelFeedId: null },
+      fr24: { lastUrl: 'https://x' },
       panelLayout: {
         tree: { type: 'leaf', id: 'fr24' },
         maximizedPanelId: 'fr24',
@@ -152,13 +139,19 @@ describe('sanitizeSessionState', () => {
       videoFit: { warbirds: 'fill' },
       profiles: []
     })
-    // The additive contract: legacy fields are still read/sanitized exactly as before.
-    expect(s.layout).toEqual({ 'group:cols': '{"atc":22}' })
-    expect(s.video).toEqual({
-      mode: 'emphasized',
-      emphasizedFeedId: 'warbirds',
-      fillPanelFeedId: null
+    expect(s.fr24.lastUrl).toBe('https://x')
+  })
+
+  it('ignores the removed legacy layout/video keys rather than choking on them (an old session.json still has them until its next flush)', () => {
+    const s = sanitizeSessionState({
+      fr24: { lastUrl: 'https://x' },
+      layout: { 'group:cols': '{"atc":22}' },
+      video: { mode: 'emphasized', emphasizedFeedId: 'warbirds', fillPanelFeedId: null }
     })
+    expect(s.fr24.lastUrl).toBe('https://x')
+    expect(s.panelLayout).toBeNull()
+    expect(s).not.toHaveProperty('layout')
+    expect(s).not.toHaveProperty('video')
   })
 
   it('a corrupt panelLayout sanitizes to null without disturbing any other section', () => {
@@ -223,23 +216,6 @@ describe('applySessionPatch', () => {
     expect(state.window).toEqual({ x: 1, y: 2, width: 900, height: 700, displayId: 3 })
     state = applySessionPatch(state, { window: null })
     expect(state.window).toBeNull()
-  })
-
-  it('merges layout entries without dropping existing keys', () => {
-    let state = applySessionPatch(defaultSessionState(), { layout: { g1: 'a' } })
-    state = applySessionPatch(state, { layout: { g2: 'b' } })
-    expect(state.layout).toEqual({ g1: 'a', g2: 'b' })
-  })
-
-  it('replaces the video layout wholesale', () => {
-    const state = applySessionPatch(defaultSessionState(), {
-      video: { mode: 'emphasized', emphasizedFeedId: 'x', fillPanelFeedId: null }
-    })
-    expect(state.video).toEqual({
-      mode: 'emphasized',
-      emphasizedFeedId: 'x',
-      fillPanelFeedId: null
-    })
   })
 
   it('replaces panelLayout wholesale (whole-section replace, like window)', () => {

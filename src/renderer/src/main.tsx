@@ -3,10 +3,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import PopoutApp from './PopoutApp'
 import {
-  hydrateVideoLayout,
+  hydratePanelLayout,
   loadSessionSnapshot,
-  startPopoutFeedTracking,
-  startVideoLayoutPersistence
+  startPanelLayoutPersistence,
+  startPopoutFeedTracking
 } from './state/sessionBootstrap'
 // Bundled woff2 @font-face declarations (Barlow Semi Condensed + Inter),
 // committed as binaries — no CDN, so the app stays usable offline at the
@@ -41,10 +41,11 @@ async function bootstrap(): Promise<void> {
 
   const isPopout = window.api.windows.role === 'popout'
   if (!isPopout) {
-    // Main-window-only wiring: seed + persist the video layout, and track which
-    // feeds are handed off to open pop-outs so the grid hides/returns them.
-    hydrateVideoLayout()
-    startVideoLayoutPersistence()
+    // Main-window-only wiring: seed + persist the panel-layout canvas, and
+    // track which feeds are handed off to open pop-outs so the canvas
+    // closes/reopens their video panels (see state/sessionBootstrap.ts).
+    hydratePanelLayout()
+    startPanelLayoutPersistence()
     startPopoutFeedTracking()
   }
 

@@ -133,7 +133,12 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Resizable panel layout
+   Panel canvas — the single-container layout (docs/Panel-System-Plan.md).
+   Every open panel is an absolutely-positioned `.leaf-frame` sibling inside
+   `.panel-canvas`; placement is entirely inline-style (computeLayoutRects'
+   rects), never DOM order — see layout/PanelCanvas.tsx's render-order
+   comment. Replaces the old react-resizable-panels Group/Panel/Separator
+   tree (decision 2026-07-19; see docs/decisions/README.md).
 --------------------------------------------------------------------------- */
 .app-body {
   flex: 1 1 auto;
@@ -141,23 +146,16 @@ body {
   overflow: hidden;
 }
 
-.layout-group {
+.panel-canvas {
+  position: relative;
   height: 100%;
   width: 100%;
-}
-
-/* react-resizable-panels applies our className to a nested div inside the flex
-   item; make that content wrapper fill the panel and never scroll (the FR24
-   bounds math assumes no scroll offset). */
-[data-panel] {
-  min-width: 0;
-  min-height: 0;
   overflow: hidden;
+  background: var(--panel-2);
 }
 
-.panel {
-  height: 100%;
-  width: 100%;
+.leaf-frame {
+  position: absolute;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -166,24 +164,90 @@ body {
   background: var(--panel);
 }
 
-/* Separators (drag handles). The library owns flex-grow/shrink and cursor; we
-   own size and color. */
-.separator {
-  background: var(--line);
+/* Maximize (docs/Panel-System-Plan.md's LOAD-BEARING INVARIANT #4): every
+   non-maximized leaf keeps rendering (players/streams keep running) but is
+   hidden rather than unmounted. */
+.leaf-frame--hidden {
+  visibility: hidden;
+}
+
+/* Shared panel-header chrome additions (maximize/close, + pop-out for video —
+   see layout/PanelChromeButtons.tsx). AudioPanel/Fr24Panel/WeatherPanel drop
+   this into their EXISTING `.panel-head` row; LeafFrame builds a fresh
+   `.panel-head` (`.leaf-frame-head`) for video panels, which had no header of
+   their own before this PR. */
+.panel-head-spacer {
+  flex: 1 1 auto;
+}
+
+.panel-head-actions {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
-.separator:hover,
-.separator[data-active] {
+.panel-head-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.panel-head-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* A leaf's content region, below its header — relative + overflow:hidden so
+   the video-fit stage (below) can be absolutely positioned inside it. */
+.panel-slot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The fit/fill-computed rect (@shared/videoGeometry's computeAspectRect) a
+   video panel's player is staged into — `.video-tile-player` (VideoTile.tsx)
+   keeps `inset: 0` within it, same as it fills a pop-out grid cell. */
+.video-tile-stage {
+  position: absolute;
+}
+
+/* Splitters: pointer capture + pure clamp math (layout/Splitter.tsx), no
+   react-resizable-panels involved. `-vertical`/`-horizontal` name the BAR's
+   own visual orientation (a `horizontal`-oriented split's children sit side
+   by side, divided by a vertical bar), matching the old `.separator-vertical`/
+   `.separator-horizontal` convention this replaces. */
+.splitter {
+  position: absolute;
+  background: var(--line);
+  cursor: pointer;
+}
+
+.splitter:hover,
+.splitter:focus-visible {
   background: var(--accent);
+  outline: none;
 }
 
-.separator-vertical {
-  width: 6px;
+.splitter.-vertical {
+  cursor: col-resize;
 }
 
-.separator-horizontal {
-  height: 6px;
+.splitter.-horizontal {
+  cursor: row-resize;
 }
 
 /* ---------------------------------------------------------------------------
@@ -418,24 +482,11 @@ body {
 }
 
 /* =============================================================================
-   PHASE 3 — Live Video grid (YouTube). Appended section; existing rules above
-   are untouched. See src/renderer/src/components/VideoGrid.tsx + VideoTile.tsx.
+   PHASE 3 — Live Video (YouTube). Appended section; existing rules above are
+   untouched. `.video-grid` is now pop-out-only (PopoutApp.tsx) — the main
+   window renders one video panel per feed on the canvas (`.video-tile-stage`
+   above), not a grid; see src/renderer/src/components/VideoTile.tsx.
 ============================================================================= */
-
-/* Mirrors .placeholder's flex-column-fill shape (see above) for the Live
-   Video panel's own section wrapper, now that it hosts the grid instead of a
-   placeholder note. */
-.video-panel-section {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.video-panel-section .video-grid {
-  flex: 1 1 auto;
-  min-height: 0;
-}
 
 .video-grid {
   height: 100%;
@@ -456,6 +507,11 @@ body {
 
 .video-tile {
   position: relative;
+  /* Under a CSS grid cell (pop-out) this equals the default stretch; inside
+     `.video-tile-stage` (main-window canvas) it is required — that parent is
+     a plain absolutely-positioned box, not a grid item. */
+  width: 100%;
+  height: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;

@@ -1,12 +1,13 @@
 import { test, expect, _electron as electron } from '@playwright/test'
 import type { ElectronApplication, Page } from '@playwright/test'
+import { defaultFeeds } from '../../src/renderer/src/youtube/defaultFeeds'
 import { mainEntry, getMainWindow, e2eEnv } from './support'
 
 // Launch-smoke for the built app. Proves the packaged main process boots, the
 // renderer is served (loopback http server in packaged mode, app:// fallback),
-// the three-panel skeleton mounts, and the FR24 WebContentsView is attached to
-// the window's content view and tracks its DOM region (non-zero bounds after a
-// resize settle).
+// the panel canvas mounts every default panel, and the FR24 WebContentsView is
+// attached to the window's content view and tracks its DOM region (non-zero
+// bounds after a resize settle).
 //
 // CRITICAL: this spec must NEVER depend on flightradar24.com loading — CI is a
 // network-restricted Linux box. We point the FR24 view at about:blank via
@@ -46,10 +47,16 @@ test('the BrowserWindow reports the expected title from the main process', async
   expect(title).toBe('Airshow Traffic Monitor')
 })
 
-test('renders all three panel headings', async () => {
+test('renders a heading for every default panel: audio, weather, fr24, and each video feed', async () => {
+  // The old shared "Live Video" grid heading is gone — each feed is its own
+  // panel now, titled with its own label (see docs/Panel-System-Plan.md and
+  // tests/e2e/panels.spec.ts for the fuller data-panel-id coverage).
   await expect(page.getByRole('heading', { name: 'ATC Audio' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Field Weather' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Flight Tracking' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Live Video' })).toBeVisible()
+  for (const feed of defaultFeeds) {
+    await expect(page.getByRole('heading', { name: feed.label })).toBeVisible()
+  }
 })
 
 test('renders the FR24 navigation toolbar', async () => {
