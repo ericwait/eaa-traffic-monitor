@@ -1,0 +1,26 @@
+{#- Wyvern Watch site-wide template override. Adds the Open Graph / Twitter social-card metadata
+(the Wyvern Watch OG images live under docs/assets/brand). This is the last brand slice of Phase 6 —
+wiring the social images and favicon into the site. -#} {% extends "base.html" %} {% block extrahead
+%} {%- set og_image = config.site_url ~ "assets/brand/og-ember-1200x630.png" -%} {%- if page -%} {%-
+set og_title = page.title | default(config.site_name, true) -%} {%- set og_desc =
+page.meta.description | default(config.site_description, true) -%} {%- set og_url =
+page.canonical_url -%} {%- else -%} {%- set og_title = config.site_name -%} {%- set og_desc =
+config.site_description -%} {%- set og_url = config.site_url -%} {%- endif -%}
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="{{ config.site_name }}" />
+<meta property="og:title" content="{{ og_title }}" />
+<meta property="og:description" content="{{ og_desc }}" />
+<meta property="og:url" content="{{ og_url }}" />
+<meta property="og:image" content="{{ og_image }}" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta
+  property="og:image:alt"
+  content="Airshow Traffic Monitor — one desktop window for airshow air traffic"
+/>
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="{{ og_title }}" />
+<meta name="twitter:description" content="{{ og_desc }}" />
+<meta name="twitter:image" content="{{ og_image }}" />
+{% endblock %}

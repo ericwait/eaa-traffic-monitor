@@ -35,6 +35,16 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  # Wyvern Watch brand overrides live in website/overrides (home-page ad +
+  # social-card meta); the skin itself is docs/assets/brand/wyvern.css
+  # (decision 2026-07-20 — see docs/decisions/README.md).
+  custom_dir: overrides
+  logo: assets/brand/icon-ember.svg
+  favicon: assets/brand/favicon.ico
+  # Bundle the app's own Barlow Semi Condensed + Inter woff2 (via wyvern.css)
+  # instead of Material's Google-Fonts CDN — same faces the desktop app ships,
+  # and no third-party font request on the published site.
+  font: false
   icon:
     repo: fontawesome/brands/github
   features:
@@ -46,21 +56,30 @@ theme:
     - content.action.edit
     - toc.follow
   palette:
-    # Respect the visitor's OS theme, with a manual toggle either way.
+    # Respect the visitor's OS theme, with a manual toggle either way. Colors
+    # are `custom` because the actual palette (Cream Classic / Ember) is driven
+    # by assets/brand/wyvern.css, which re-points Material's design tokens at
+    # the Wyvern Watch brand system.
     - media: '(prefers-color-scheme: light)'
       scheme: default
-      primary: deep orange
-      accent: deep orange
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: '(prefers-color-scheme: dark)'
       scheme: slate
-      primary: deep orange
-      accent: deep orange
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+
+# Wyvern Watch skin: re-points Material's tokens at the app's brand system
+# (Cream Classic / Ember) and bundles the app's fonts. Path is relative to
+# docs_dir (../docs), so the file is docs/assets/brand/wyvern.css.
+extra_css:
+  - assets/brand/wyvern.css
 
 markdown_extensions:
   - admonition
@@ -93,6 +112,14 @@ validation:
   unrecognized_links: warn
   anchors: warn
 
+# Internal, one-off implementation plans that are intentionally not surfaced in
+# the public nav (they are working docs, not product/design documentation).
+# Listing them here keeps the strict build from warning on their omission while
+# leaving the primary nav clean.
+not_in_nav: |
+  /Panel-System-Plan.md
+  /WYVERN-RESKIN-PLAN.md
+
 nav:
   - Home: README.md
   - Design:
@@ -105,6 +132,7 @@ nav:
       - Video: design/Video.md
       - Tracking: design/Tracking.md
       - Weather: design/Weather.md
+      - Layout: design/Layout.md
   - Development:
       - Tech stack: development/TechStack.md
       - Getting started: development/Getting-Started.md

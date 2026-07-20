@@ -1,0 +1,524 @@
+/* ============================================================================
+   Wyvern Watch skin for the MkDocs Material docs site.
+
+   Re-points Material's design tokens at the app's own brand system so the
+   website reads as an extension of the desktop app. The palette mirrors
+   design/brand/tokens.css (the source of truth for the renderer); values are
+   duplicated here rather than imported because the static site is a separate
+   build context with no access to the renderer's asset tree.
+
+   Themes: Cream Classic (Material scheme `default`) / Ember (scheme `slate`),
+   following the visitor's OS with a manual toggle. The site header and the
+   home-page hero are deliberately near-black (#161210 — the app's chrome
+   color) in BOTH themes, so the Ember mark sits seamlessly and the site looks
+   like the app whichever theme is active.
+   ========================================================================== */
+
+/* ---- Fonts: the same latin-subset woff2 the app bundles -------------------- */
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('fonts/barlow-semi-condensed-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/barlow-semi-condensed-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Barlow Semi Condensed';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('fonts/barlow-semi-condensed-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/inter-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('fonts/inter-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('fonts/inter-600.woff2') format('woff2');
+}
+
+/* ---- Type stacks ---------------------------------------------------------- */
+:root {
+  --md-text-font-family:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --md-code-font-family:
+    ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Roboto Mono', monospace;
+  --wy-font-display:
+    'Barlow Semi Condensed', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ============================================================================
+   Cream Classic — light / default
+   ========================================================================== */
+[data-md-color-scheme='default'] {
+  --md-default-bg-color: #f1ead9;
+  --md-default-bg-color--light: rgba(33, 48, 58, 0.04);
+  --md-default-bg-color--lighter: rgba(33, 48, 58, 0.02);
+  --md-default-bg-color--lightest: rgba(33, 48, 58, 0.01);
+  --md-default-fg-color: #21303a;
+  --md-default-fg-color--light: rgba(33, 48, 58, 0.62);
+  --md-default-fg-color--lighter: rgba(33, 48, 58, 0.34);
+  --md-default-fg-color--lightest: rgba(33, 48, 58, 0.1);
+
+  /* Header ground = the app's near-black chrome; text on it = cream. */
+  --md-primary-fg-color: #161210;
+  --md-primary-fg-color--light: #201a17;
+  --md-primary-fg-color--dark: #0f0c0a;
+  --md-primary-bg-color: #f0e9de;
+  --md-primary-bg-color--light: rgba(240, 233, 222, 0.72);
+
+  /* Accent = roundel red on the cream ground. */
+  --md-accent-fg-color: #c0392b;
+  --md-accent-fg-color--transparent: rgba(192, 57, 43, 0.1);
+  --md-accent-bg-color: #fbf6ea;
+  --md-accent-bg-color--light: rgba(251, 246, 234, 0.7);
+
+  --md-typeset-color: #21303a;
+  --md-typeset-a-color: #c0392b;
+  --md-code-fg-color: #21303a;
+  --md-code-bg-color: #e7ddc8;
+
+  --md-footer-bg-color: #161210;
+  --md-footer-bg-color--dark: #0f0c0a;
+  --md-footer-fg-color: #f0e9de;
+  --md-footer-fg-color--light: rgba(240, 233, 222, 0.72);
+  --md-footer-fg-color--lighter: rgba(240, 233, 222, 0.46);
+
+  /* Local marketing tokens (flip with the theme). */
+  --wy-surface: #fbf6ea;
+  --wy-surface-2: #e7ddc8;
+  --wy-border: #d8cdb4;
+  --wy-ink: #21303a;
+  --wy-muted: #566570;
+  --wy-accent: #c0392b;
+  --wy-accent-hover: #a6301f;
+  --wy-accent-contrast: #fbf6ea;
+}
+
+/* ============================================================================
+   Ember — dark / slate
+   ========================================================================== */
+[data-md-color-scheme='slate'] {
+  --md-default-bg-color: #161210;
+  --md-default-bg-color--light: rgba(240, 233, 222, 0.05);
+  --md-default-bg-color--lighter: rgba(240, 233, 222, 0.03);
+  --md-default-bg-color--lightest: rgba(240, 233, 222, 0.02);
+  --md-default-fg-color: #f0e9de;
+  --md-default-fg-color--light: rgba(240, 233, 222, 0.68);
+  --md-default-fg-color--lighter: rgba(240, 233, 222, 0.4);
+  --md-default-fg-color--lightest: rgba(240, 233, 222, 0.12);
+
+  --md-primary-fg-color: #161210;
+  --md-primary-fg-color--light: #201a17;
+  --md-primary-fg-color--dark: #0f0c0a;
+  --md-primary-bg-color: #f0e9de;
+  --md-primary-bg-color--light: rgba(240, 233, 222, 0.72);
+
+  --md-accent-fg-color: #e4572e;
+  --md-accent-fg-color--transparent: rgba(228, 87, 46, 0.12);
+  --md-accent-bg-color: #161210;
+  --md-accent-bg-color--light: rgba(22, 18, 16, 0.7);
+
+  --md-typeset-color: #f0e9de;
+  --md-typeset-a-color: #e4572e;
+  --md-code-fg-color: #f0e9de;
+  --md-code-bg-color: #201a17;
+
+  --md-footer-bg-color: #0f0c0a;
+  --md-footer-bg-color--dark: #0b0908;
+  --md-footer-fg-color: #f0e9de;
+  --md-footer-fg-color--light: rgba(240, 233, 222, 0.72);
+  --md-footer-fg-color--lighter: rgba(240, 233, 222, 0.46);
+
+  --wy-surface: #201a17;
+  --wy-surface-2: #2b2420;
+  --wy-border: #3a302a;
+  --wy-ink: #f0e9de;
+  --wy-muted: #b3a99b;
+  --wy-accent: #e4572e;
+  --wy-accent-hover: #f26b44;
+  --wy-accent-contrast: #161210;
+}
+
+/* ---- Typography: gauge-face headings -------------------------------------- */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-header__title,
+.md-nav__title {
+  font-family: var(--wy-font-display);
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
+.md-typeset h2 {
+  font-weight: 600;
+}
+
+/* Tabular numerics wherever data lines up. */
+.md-typeset code,
+.md-typeset kbd,
+.md-typeset pre {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   Home page — advertisement
+   ========================================================================== */
+
+/* Full-bleed sections injected in the `tabs` block escape Material's grid. */
+.wy-section {
+  width: 100%;
+}
+.wy-wrap {
+  max-width: 74rem;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+
+/* ---- Hero (always near-black — the command-center ground) ----------------- */
+.wy-hero {
+  position: relative;
+  overflow: hidden;
+  background: #161210;
+  color: #f0e9de;
+  /* faint warm horizon + a single contrail streak, the brand's only gradient */
+  background-image:
+    radial-gradient(120% 80% at 78% -10%, rgba(228, 87, 46, 0.16), transparent 55%),
+    linear-gradient(180deg, #1b1613 0%, #161210 42%);
+}
+.wy-hero__wrap {
+  max-width: 74rem;
+  margin-inline: auto;
+  padding: clamp(2.75rem, 6vw, 5rem) 1.5rem clamp(2rem, 4vw, 3.25rem);
+}
+.wy-hero__lead {
+  max-width: 42rem;
+}
+.wy-hero__mark {
+  display: block;
+  margin: 0 0 1.1rem;
+  border-radius: 14px;
+}
+.wy-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--wy-font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #f0a17a;
+  margin: 0 0 1rem;
+}
+.wy-live {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: #e4572e;
+  box-shadow: 0 0 0 0 rgba(228, 87, 46, 0.6);
+  animation: wy-pulse 2s ease-out infinite;
+}
+@keyframes wy-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(228, 87, 46, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 0.5rem rgba(228, 87, 46, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(228, 87, 46, 0);
+  }
+}
+.wy-hero h1 {
+  font-family: var(--wy-font-display);
+  font-weight: 700;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin: 0 0 1rem;
+  color: #f7f2e9;
+}
+.wy-hero h1 em {
+  font-style: normal;
+  color: #e4572e;
+}
+.wy-lede {
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  line-height: 1.5;
+  color: #cdc3b6;
+  margin: 0 0 1.75rem;
+}
+
+/* CTA row */
+.wy-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+.wy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--md-text-font-family);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0.8rem 1.4rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms cubic-bezier(0.2, 0.6, 0.2, 1),
+    border-color 120ms cubic-bezier(0.2, 0.6, 0.2, 1),
+    transform 120ms cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+.wy-btn:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.wy-btn--primary {
+  background: var(--wy-accent);
+  color: #fff;
+  border-color: var(--wy-accent);
+}
+.wy-btn--primary:hover {
+  background: var(--wy-accent-hover);
+  border-color: var(--wy-accent-hover);
+  color: #fff;
+}
+.wy-btn--ghost {
+  background: transparent;
+  color: var(--wy-ink);
+  border-color: var(--wy-border);
+}
+.wy-btn--ghost:hover {
+  border-color: var(--wy-accent);
+  color: var(--wy-accent);
+}
+/* On the always-dark hero, force the light-on-dark ghost/ember treatment. */
+.wy-hero .wy-btn--primary {
+  background: #e4572e;
+  border-color: #e4572e;
+  color: #161210;
+}
+.wy-hero .wy-btn--primary:hover {
+  background: #f26b44;
+  border-color: #f26b44;
+}
+.wy-hero .wy-btn--ghost {
+  color: #f0e9de;
+  border-color: rgba(240, 233, 222, 0.32);
+}
+.wy-hero .wy-btn--ghost:hover {
+  border-color: #f0a17a;
+  color: #f0a17a;
+}
+
+.wy-meta {
+  font-family: var(--md-code-font-family);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: #9c9184;
+  margin: 1.15rem 0 0;
+}
+
+/* Screenshot frame — the app already carries its own window chrome. */
+.wy-shot {
+  margin-top: clamp(2rem, 4vw, 3rem);
+  border: 1px solid rgba(240, 233, 222, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  background: #0f0c0a;
+}
+.wy-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---- Pillars (theme-adaptive) --------------------------------------------- */
+.wy-pillars {
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  padding: clamp(2.75rem, 6vw, 4.5rem) 0;
+  border-top: 1px solid var(--wy-border);
+}
+.wy-section-label {
+  font-family: var(--wy-font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  color: var(--wy-muted);
+  margin: 0 0 0.5rem;
+}
+.wy-section-title {
+  font-family: var(--wy-font-display);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  margin: 0 0 2rem;
+  color: var(--wy-ink);
+}
+.wy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+.wy-pillar {
+  background: var(--wy-surface);
+  border: 1px solid var(--wy-border);
+  border-radius: 14px;
+  padding: 1.5rem 1.5rem 1.6rem;
+}
+.wy-pillar h3 {
+  font-family: var(--wy-font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 1.05rem;
+  margin: 0 0 0.6rem;
+  color: var(--wy-ink);
+}
+.wy-pillar p {
+  margin: 0;
+  color: var(--wy-muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+.wy-pillar__tag {
+  display: inline-block;
+  font-family: var(--md-code-font-family);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--wy-accent);
+  margin-top: 1rem;
+}
+.wy-pillar__rule {
+  height: 3px;
+  width: 2.25rem;
+  border-radius: 999px;
+  background: var(--wy-accent);
+  margin-bottom: 1.1rem;
+}
+
+/* ---- Showcase: the vertical / second-monitor story ------------------------ */
+.wy-showcase {
+  background: var(--wy-surface);
+  color: var(--md-default-fg-color);
+  padding: clamp(2.75rem, 6vw, 4.5rem) 0;
+  border-top: 1px solid var(--wy-border);
+}
+.wy-showcase__grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: center;
+}
+.wy-showcase__body p {
+  color: var(--wy-muted);
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+.wy-showcase__shot {
+  justify-self: center;
+  max-width: 340px;
+  width: 100%;
+  border: 1px solid var(--wy-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  background: #0f0c0a;
+}
+.wy-showcase__shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---- Download band -------------------------------------------------------- */
+.wy-download {
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  padding: clamp(2.75rem, 6vw, 4.5rem) 0;
+  border-top: 1px solid var(--wy-border);
+  text-align: center;
+}
+.wy-download .wy-section-title {
+  margin-bottom: 0.75rem;
+}
+.wy-download p {
+  color: var(--wy-muted);
+  margin: 0 auto 1.75rem;
+  max-width: 34rem;
+}
+.wy-download .wy-cta {
+  justify-content: center;
+}
+
+/* ---- Quiet divider before the documentation index ------------------------- */
+.wy-docs-divider {
+  background: var(--md-default-bg-color);
+  border-top: 1px solid var(--wy-border);
+  padding: 2.25rem 0 0;
+}
+.wy-docs-divider .wy-section-label {
+  text-align: center;
+}
+
+/* ---- Responsive ----------------------------------------------------------- */
+@media screen and (max-width: 60em) {
+  .wy-grid {
+    grid-template-columns: 1fr;
+  }
+  .wy-showcase__grid {
+    grid-template-columns: 1fr;
+  }
+  .wy-showcase__shot {
+    order: -1;
+  }
+}
+
+/* Respect reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  .wy-live {
+    animation: none;
+  }
+  .wy-btn:hover {
+    transform: none;
+  }
+}
