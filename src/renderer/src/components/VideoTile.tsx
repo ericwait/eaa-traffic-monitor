@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { VideoFitMode } from '@shared/panelLayout'
 import type { DefaultFeed } from '../youtube/defaultFeeds'
 import { FeedPlayer, type FeedPlayerStatus } from '../youtube/player'
 
@@ -24,13 +25,22 @@ import { FeedPlayer, type FeedPlayerStatus } from '../youtube/player'
 
 export interface VideoTileProps {
   feed: DefaultFeed
-  /** grid-area name to apply in emphasized mode; undefined in uniform/fill mode. */
+  /** grid-area name to apply in emphasized mode; undefined in uniform/fill mode (pop-out grid only). */
   area?: string
-  emphasized: boolean
-  /** True only when this tile is filling the entire video panel. */
-  filled: boolean
-  onToggleEmphasize: () => void
-  onFillPanel: () => void
+  /** Pop-out grid only — the main window's panel canvas has no emphasize concept (maximize supersedes it; see docs/decisions/README.md). */
+  emphasized?: boolean
+  /** True only when this tile is filling the entire video panel (pop-out grid only). */
+  filled?: boolean
+  /**
+   * Pop-out grid only. Absent in the main window's panel canvas (LeafFrame
+   * renders a VideoTile with neither callback) — the emphasize/fill hover
+   * buttons and the double-click gesture below render/act ONLY when BOTH are
+   * provided, so a main-window tile shows neither (decision 2026-07-19: the
+   * main window's uniform/emphasized/fill modes are retired in favor of
+   * per-panel maximize + fit/fill; pop-outs keep their own grid modes).
+   */
+  onToggleEmphasize?: () => void
+  onFillPanel?: () => void
   /** Restored starting volume (0..100); defaults to 100 when unspecified. */
   initialVolume?: number
   /** Restored starting mute; players default to muted so autoplay is guaranteed. */
@@ -39,6 +49,8 @@ export interface VideoTileProps {
   onAudioChange?: (state: { volume: number; muted: boolean }) => void
   /** When provided, a "pop out" button appears that carries this feed to its own window. */
   onPopOut?: () => void
+  /** The panel canvas's per-feed fit/fill mode (main window only) — purely a `data-fit-mode` marker here; the actual geometry is applied by the canvas's `.video-tile-stage` wrapper (layout/LeafFrame.tsx), not by this component. Defaults to 'fit'. */
+  fitMode?: VideoFitMode
 }
 
 const AUDIO_BOUNDARY_TOOLTIP =
@@ -62,14 +74,15 @@ function statusLabel(status: FeedPlayerStatus, feedLabel: string): string {
 function VideoTile({
   feed,
   area,
-  emphasized,
-  filled,
+  emphasized = false,
+  filled = false,
   onToggleEmphasize,
   onFillPanel,
   initialVolume,
   initialMuted,
   onAudioChange,
-  onPopOut
+  onPopOut,
+  fitMode
 }: VideoTileProps): React.JSX.Element {
   const playerHostRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<FeedPlayer | null>(null)
@@ -151,7 +164,12 @@ function VideoTile({
     })
   }, [onAudioChange, volume])
 
+  // Pop-out grid only (see the props doc comment above) — a main-window tile
+  // (LeafFrame) passes neither callback, so double-click here is a no-op;
+  // maximize (a header double-click one level up, see layout/LeafFrame.tsx)
+  // is the main window's equivalent gesture.
   const handleDoubleClick = useCallback((): void => {
+    if (!onToggleEmphasize || !onFillPanel) return
     if (emphasized) onFillPanel()
     else onToggleEmphasize()
   }, [emphasized, onFillPanel, onToggleEmphasize])
@@ -172,6 +190,7 @@ function VideoTile({
       data-testid="video-tile"
       data-feed-id={feed.id}
       data-status={status}
+      data-fit-mode={fitMode ?? 'fit'}
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
@@ -224,24 +243,32 @@ function VideoTile({
           aria-label={`${feed.label} volume`}
           className="video-tile-volume"
         />
-        <button
-          type="button"
-          className="video-tile-emphasize-btn"
-          aria-label={emphasized ? `Demote ${feed.label}` : `Emphasize ${feed.label}`}
-          title={emphasized ? 'Demote to uniform grid' : 'Emphasize this feed'}
-          onClick={onToggleEmphasize}
-        >
-          {emphasized ? '⊖' : '⊕'}
-        </button>
-        <button
-          type="button"
-          className="video-tile-fill-btn"
-          aria-label={`Fill panel with ${feed.label}`}
-          title="Fill the entire video panel with this feed"
-          onClick={onFillPanel}
-        >
-          {'⤢'}
-        </button>
+        {/* Emphasize/fill are pop-out-grid concepts only — the main window's
+            panel canvas supersedes them with per-panel maximize (see the
+            props doc comment above), so these render only when a pop-out
+            actually supplies both callbacks. */}
+        {onToggleEmphasize && (
+          <button
+            type="button"
+            className="video-tile-emphasize-btn"
+            aria-label={emphasized ? `Demote ${feed.label}` : `Emphasize ${feed.label}`}
+            title={emphasized ? 'Demote to uniform grid' : 'Emphasize this feed'}
+            onClick={onToggleEmphasize}
+          >
+            {emphasized ? '⊖' : '⊕'}
+          </button>
+        )}
+        {onFillPanel && (
+          <button
+            type="button"
+            className="video-tile-fill-btn"
+            aria-label={`Fill panel with ${feed.label}`}
+            title="Fill the entire video panel with this feed"
+            onClick={onFillPanel}
+          >
+            {'⤢'}
+          </button>
+        )}
         {onPopOut && (
           <button
             type="button"
