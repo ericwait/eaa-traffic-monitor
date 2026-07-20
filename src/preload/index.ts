@@ -6,16 +6,19 @@ import type {
   Fr24Bounds,
   Fr24NavAction,
   Fr24NavState,
+  LiveAtcSearchResult,
   OpenPopoutRequest,
   PopoutPatch,
   PopoutSummary,
   ResolveStreamResult,
   SessionPatch,
   SessionState,
+  UpdateStreamsResult,
   WeatherResult,
   WindowRole
 } from '@shared/ipc'
 import { IpcChannels } from '@shared/ipc'
+import type { StreamConfig } from '@shared/defaultConfig'
 
 /**
  * Derive this window's renderer role from its launch URL query. The main window
@@ -69,13 +72,19 @@ const api: AppApi = {
   },
   config: {
     get: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configGet),
-    reload: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configReload)
+    reload: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configReload),
+    updateStreams: (streams: StreamConfig[]): Promise<UpdateStreamsResult> =>
+      ipcRenderer.invoke(IpcChannels.configUpdateStreams, streams)
   },
   audio: {
     resolveStream: (streamId: string, opts?: { fresh?: boolean }): Promise<ResolveStreamResult> =>
       ipcRenderer.invoke(IpcChannels.audioResolveStream, streamId, opts),
     // Static flag read once from the launch env — see AudioApi.isE2E.
     isE2E: process.env.AUDIO_E2E === '1'
+  },
+  liveatc: {
+    search: (icao: string, opts?: { fresh?: boolean }): Promise<LiveAtcSearchResult> =>
+      ipcRenderer.invoke(IpcChannels.liveatcSearch, icao, opts)
   },
   weather: {
     get: (): Promise<WeatherResult> => ipcRenderer.invoke(IpcChannels.weatherGet),

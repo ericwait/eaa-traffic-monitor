@@ -1,9 +1,15 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
+import { z } from 'zod'
 import type { AppConfig, StreamConfig } from '@shared/defaultConfig'
-import { configSchema, DEFAULT_CONFIG, formatConfigError } from '@shared/defaultConfig'
-import type { ConfigResult } from '@shared/ipc'
+import {
+  configSchema,
+  DEFAULT_CONFIG,
+  formatConfigError,
+  streamSchema
+} from '@shared/defaultConfig'
+import type { ConfigResult, UpdateStreamsResult } from '@shared/ipc'
 
 // config.json lives in app.getPath('userData'). On first run the compiled
 // defaults are written verbatim so the operator has a file to edit; on every
@@ -88,6 +94,61 @@ export function reloadConfig(): ConfigResult {
   cached = loadFromDisk()
   console.log(`[config] reloaded from ${cached.filePath} (source: ${cached.source})`)
   return cached
+}
+
+/**
+ * Replace the streams block of the active config and persist it (the channel
+ * manager's add / remove / reorder — decision 2026-07-19: the ATC panel may
+ * rewrite `streams`; the file stays hand-editable and every other block — vad,
+ * ducking, weather, notes — passes through untouched).
+ *
+ * Never throws. On any failure nothing is written and the previous config
+ * stays in force. The write is atomic (temp file + rename) so a crash mid-save
+ * can never leave a half-written config.json for the 6 a.m. debugging session.
+ */
+export function updateStreams(streams: unknown): UpdateStreamsResult {
+  const current = getConfig()
+
+  // A defaults-fallback means config.json exists on disk but is broken. Saving
+  // now would silently overwrite whatever the operator was hand-editing —
+  // refuse and point at the file instead (the banner already names the error).
+  if (current.source === 'defaults-fallback') {
+    return {
+      ok: false,
+      error:
+        `config.json is currently invalid, so channel edits cannot be saved ` +
+        `without overwriting it. Fix or delete ${current.filePath}, reload, then retry.`
+    }
+  }
+
+  const parsed = z.array(streamSchema).min(1).safeParse(streams)
+  if (!parsed.success) {
+    return { ok: false, error: `invalid streams: ${formatConfigError(parsed.error)}` }
+  }
+
+  const ids = new Set(parsed.data.map((s) => s.id))
+  if (ids.size !== parsed.data.length) {
+    return { ok: false, error: 'invalid streams: duplicate stream ids' }
+  }
+  const priorities = new Set(parsed.data.map((s) => s.priority))
+  if (priorities.size !== parsed.data.length) {
+    return { ok: false, error: 'invalid streams: duplicate priority ranks' }
+  }
+
+  const nextConfig: AppConfig = { ...current.config, streams: parsed.data }
+  const { filePath } = current
+  try {
+    mkdirSync(dirname(filePath), { recursive: true })
+    const tempPath = `${filePath}.tmp`
+    writeFileSync(tempPath, `${JSON.stringify(nextConfig, null, 2)}\n`, 'utf8')
+    renameSync(tempPath, filePath)
+  } catch (err: unknown) {
+    return { ok: false, error: `could not write ${filePath}: ${errMessage(err)}` }
+  }
+
+  cached = { config: nextConfig, source: 'file', filePath }
+  console.log(`[config] streams updated (${parsed.data.length} streams) — wrote ${filePath}`)
+  return { ok: true, result: cached }
 }
 
 /** Look up a single stream definition by id from the active config. */
