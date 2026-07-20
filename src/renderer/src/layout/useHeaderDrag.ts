@@ -8,7 +8,7 @@ import {
   type LeafRectInput,
   type Point
 } from './dropZones'
-import { useAppStore } from '../state/store'
+import { useLayoutController } from './LayoutController'
 
 // The header drag-to-dock gesture (docs/Panel-System-Plan.md § Key
 // interactions § Header drag-to-dock): pointerdown on a `.panel-head` (never
@@ -138,8 +138,7 @@ export function useHeaderDrag(params: {
   rootRect: Rect
 }): { dragState: HeaderDragState | null; handlers: HeaderDragHandlers } {
   const { containerRef, leaves, rootRect } = params
-  const setDragPanelId = useAppStore((s) => s.setDragPanelId)
-  const commitDrag = useAppStore((s) => s.commitDrag)
+  const { setDragPanelId, commitDrag } = useLayoutController()
 
   const machineRef = useRef<DragMachine | null>(null)
   const [dragState, setDragState] = useState<HeaderDragState | null>(null)

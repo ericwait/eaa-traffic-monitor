@@ -7,7 +7,7 @@ import {
   type PanelId,
   type Rect
 } from '@shared/panelLayout'
-import { useAppStore } from '../state/store'
+import { useLayoutController } from './LayoutController'
 import { canvasRenderOrder } from './canvasRenderOrder'
 import { panelKind } from './panelMeta'
 import { useHeaderDrag } from './useHeaderDrag'
@@ -112,11 +112,23 @@ function collectSplitMeta(
   return out
 }
 
-function PanelCanvas(): React.JSX.Element {
-  const panelTree = useAppStore((s) => s.panelTree)
-  const maximizedPanelId = useAppStore((s) => s.maximizedPanelId)
-  const dragPanelId = useAppStore((s) => s.dragPanelId)
-  const updateSplitSizesAction = useAppStore((s) => s.updateSplitSizes)
+export interface PanelCanvasProps {
+  /**
+   * Renders one leaf's body given its panel id — supplied by the window
+   * hosting the canvas (LayoutShell.tsx's `renderMainLeafBody` for the main
+   * window's four kinds today; a future pop-out supplies its own). Keeps this
+   * file and LeafFrame free of any audio/weather/fr24/video switch.
+   */
+  renderLeafBody: (panelId: PanelId) => React.ReactNode
+}
+
+function PanelCanvas({ renderLeafBody }: PanelCanvasProps): React.JSX.Element {
+  const {
+    tree: panelTree,
+    maximizedPanelId,
+    dragPanelId,
+    updateSplitSizes: updateSplitSizesAction
+  } = useLayoutController()
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [size, setSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
@@ -234,6 +246,7 @@ function PanelCanvas(): React.JSX.Element {
             rect={effectiveRect}
             hidden={hidden}
             isMaximized={isMaximizedTarget}
+            renderLeafBody={renderLeafBody}
           />
         )
       })}

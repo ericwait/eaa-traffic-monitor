@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { clampSizesToMinPx, type Orientation, type Rect } from '@shared/panelLayout'
-import { FR24_RELAYOUT_EVENT } from '../state/store'
+import { FR24_RELAYOUT_EVENT } from './relayoutEvent'
 
 // A single splitter/divider between two adjacent children of one split node.
 // Pointer capture + pure clamp math (reused from @shared/panelLayout, not
