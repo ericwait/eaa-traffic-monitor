@@ -46,7 +46,7 @@ const INITIAL_NAV_STATE: Fr24NavState = {
  * docs/decisions/README.md (decision 2026-07-20). `'layout-manager'` (PR5) is
  * the snap template gallery + named-profile CRUD dialog — see
  * layout/LayoutManagerModal.tsx — opened from the native Layout menu's
- * "Layout Manager…" item (src/main/menu.ts).
+ * "Main Window Layout…" item (src/main/menu.ts).
  */
 export type OverlayKind = 'about' | 'add-channel' | 'move-panel' | 'layout-manager'
 
@@ -417,12 +417,13 @@ export const useAppStore = create<AppState>((set) => ({
 }))
 
 /**
- * Custom DOM event the layout dispatches when a resizable panel divider moves,
- * so the FR24 region can re-measure and re-sync its native view bounds. A plain
- * window event keeps the layout and the FR24 panel decoupled and avoids a store
- * write (and re-render) on every pointer move during a drag.
+ * Re-exported for this module's existing consumers (LayoutShell.tsx,
+ * Fr24Panel.tsx) — the constant itself now lives in layout/relayoutEvent.ts
+ * so the window-agnostic panel canvas (Splitter.tsx) never needs to import
+ * this main-window store just for a constant string (decision 2026-07-20;
+ * see LayoutController.ts and docs/decisions/README.md).
  */
-export const FR24_RELAYOUT_EVENT = 'fr24-relayout'
+export { FR24_RELAYOUT_EVENT } from '../layout/relayoutEvent'
 
 // ---------------------------------------------------------------------------
 // Audio slice types (Phase 2a). The engine (a plain-TS singleton) writes these;

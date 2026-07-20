@@ -1,5 +1,5 @@
 import type { PanelId, VideoFitMode } from '@shared/panelLayout'
-import { useAppStore } from '../state/store'
+import { useLayoutController } from './LayoutController'
 
 // Shared fit/move/maximize/close (and, for video panels, pop-out) chrome
 // buttons.
@@ -8,11 +8,18 @@ import { useAppStore } from '../state/store'
 // (title + their own actions) — LeafFrame does NOT wrap them in a second,
 // duplicate header (that would visibly diverge from today's single-header-
 // per-panel arrangement). Instead those three components import THIS
-// component directly and drop it into their existing header row. Video
-// panels have no header of their own before this PR, so LeafFrame builds one
-// and uses this component there too. Either way every panel ends up with the
-// same move/maximize/close (+ fit + pop-out for video) affordances from one
-// definition.
+// component directly and drop it into their existing header row.
+// components/VideoLeafBody.tsx (the fourth leaf-body kind, supplied by the
+// window alongside those three — see LayoutShell.tsx's `renderMainLeafBody`)
+// builds its own header and uses this component there too. Either way every
+// panel ends up with the same move/maximize/close (+ fit + pop-out for video)
+// affordances from one definition.
+//
+// (decision 2026-07-20) Reads/writes ONLY through `useLayoutController()`,
+// never `useAppStore` directly — every caller above renders as a leaf body
+// inside the panel canvas, which is always wrapped in a
+// `LayoutControllerProvider` (LayoutShell.tsx for the main window today). See
+// LayoutController.ts and docs/decisions/README.md.
 //
 // "Move panel…" (PR4 of the panel-system effort) opens MovePanelModal via the
 // `overlay` pattern (`openMovePanel` sets `overlay: 'move-panel'` +
@@ -41,10 +48,7 @@ function PanelChromeButtons({
   onPopOut,
   fit
 }: PanelChromeButtonsProps): React.JSX.Element {
-  const maximizedPanelId = useAppStore((s) => s.maximizedPanelId)
-  const toggleMaximize = useAppStore((s) => s.toggleMaximize)
-  const closePanel = useAppStore((s) => s.closePanel)
-  const openMovePanel = useAppStore((s) => s.openMovePanel)
+  const { maximizedPanelId, toggleMaximize, closePanel, openMovePanel } = useLayoutController()
   const isMaximized = maximizedPanelId === panelId
 
   return (

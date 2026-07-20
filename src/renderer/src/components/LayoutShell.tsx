@@ -1,15 +1,44 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeMode } from '@shared/ipc'
-import { collectLeafIds } from '@shared/panelLayout'
+import { collectLeafIds, type PanelId } from '@shared/panelLayout'
 import AboutModal from './AboutModal'
 import PanelCanvas from '../layout/PanelCanvas'
 import MovePanelModal from '../layout/MovePanelModal'
 import LayoutManagerModal from '../layout/LayoutManagerModal'
+import { LayoutControllerProvider } from '../layout/LayoutController'
+import { panelKind } from '../layout/panelMeta'
+import AudioPanel from '../audio/AudioPanel'
+import WeatherPanel from '../weather/WeatherPanel'
+import Fr24Panel from './Fr24Panel'
+import VideoLeafBody from './VideoLeafBody'
+import { useMainLayoutController } from './useMainLayoutController'
 import { useAppStore, FR24_RELAYOUT_EVENT } from '../state/store'
 import { sessionSnapshot } from '../state/sessionBootstrap'
 // The adaptive Wyvern Watch mark (Cream light / Ember dark), imported as a bundled
 // asset URL — never inlined as raw SVG — and rendered as a decorative <img>.
 import brandMark from '../../../../design/brand/svg/icon.svg'
+
+/**
+ * The MAIN window's four leaf-body kinds (docs/Panel-System-Plan.md), passed
+ * to `PanelCanvas` as `renderLeafBody` so `LeafFrame` itself stays generic
+ * (decision 2026-07-20; see layout/LeafFrame.tsx and layout/LayoutController.ts).
+ * A pop-out window will supply its own mapping in a later PR. Module-scope
+ * (not a hook) since it captures nothing from LayoutShell's own state — every
+ * one of these four components reads what it needs itself (`useAppStore` for
+ * the first three, `useLayoutController()` for VideoLeafBody).
+ */
+function renderMainLeafBody(panelId: PanelId): React.ReactNode {
+  switch (panelKind(panelId)) {
+    case 'audio':
+      return <AudioPanel />
+    case 'weather':
+      return <WeatherPanel />
+    case 'fr24':
+      return <Fr24Panel />
+    case 'video':
+      return <VideoLeafBody panelId={panelId} />
+  }
+}
 
 // Theme toggle (Wyvern Watch reskin, decision 2026-07-19): cycles System ->
 // Cream -> Ember -> System. The click sends theme.set to the main process,
@@ -30,9 +59,12 @@ function nextTheme(current: ThemeMode): ThemeMode {
 // canvas — a single absolutely-positioned region hosting every open panel
 // (ATC audio, field weather, FR24, one per video feed), replacing the old
 // hard-coded react-resizable-panels Group/Panel/Separator tree (see
-// docs/Panel-System-Plan.md). Panel content composition (which component a
-// panel id mounts) lives in layout/LeafFrame.tsx, not here — this file only
-// owns the header and the cross-cutting FR24 visibility rule.
+// docs/Panel-System-Plan.md). This file owns the header, the cross-cutting
+// FR24 visibility rule, AND (decision 2026-07-20) the main window's own
+// LayoutController + `renderMainLeafBody` mapping — the two things that make
+// the canvas itself (layout/PanelCanvas.tsx, LeafFrame.tsx) window-agnostic.
+// The canvas/LeafFrame never decide which component a panel id mounts; that
+// composition lives here, one level up.
 
 function LayoutShell(): React.JSX.Element {
   const setNavState = useAppStore((s) => s.setNavState)
@@ -45,6 +77,13 @@ function LayoutShell(): React.JSX.Element {
   const maximizedPanelId = useAppStore((s) => s.maximizedPanelId)
   const dragPanelId = useAppStore((s) => s.dragPanelId)
   const toggleMaximize = useAppStore((s) => s.toggleMaximize)
+
+  // The canvas's own controller (decision 2026-07-20) — built here, backed by
+  // the same useAppStore selectors read directly above, so this effect and
+  // the canvas below observe the identical underlying state. See
+  // layout/LayoutController.ts's header comment for why the canvas itself
+  // must never import useAppStore.
+  const layoutController = useMainLayoutController()
 
   // Seeded from the synchronous session snapshot (loaded before React mounts —
   // see main.tsx) so the label is correct on first paint, not a flash of
@@ -155,7 +194,9 @@ function LayoutShell(): React.JSX.Element {
       </header>
 
       <div className="app-body">
-        <PanelCanvas />
+        <LayoutControllerProvider value={layoutController}>
+          <PanelCanvas renderLeafBody={renderMainLeafBody} />
+        </LayoutControllerProvider>
       </div>
 
       {overlay === 'about' && <AboutModal onClose={() => setOverlay(null)} />}

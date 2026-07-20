@@ -107,8 +107,8 @@ let audioBoxAfterApply: { x: number; y: number; width: number; height: number }
 let weatherBoxAfterApply: { x: number; y: number; width: number; height: number }
 let videoBoxAfterApply: { x: number; y: number; width: number; height: number }
 
-test('the Layout Manager opens from the native Layout menu and hides FR24 underneath it', async () => {
-  await clickLayoutMenuItem('Layout Manager…')
+test('the Main Window Layout dialog opens from the native Layout menu and hides FR24 underneath it', async () => {
+  await clickLayoutMenuItem('Main Window Layout…')
   await expect(page.getByTestId('layout-manager-modal')).toBeVisible()
   // Same consolidated FR24 rule every other overlay proves (panels.spec.ts's
   // Move-panel test) — opening this modal sets `overlay: 'layout-manager'`.
@@ -167,7 +167,7 @@ test('applying the 2x2 template with a chosen assignment replaces the whole layo
 })
 
 test('saving the current layout as a named profile lists it as active, and the native Layout menu picks it up', async () => {
-  await clickLayoutMenuItem('Layout Manager…')
+  await clickLayoutMenuItem('Main Window Layout…')
   await page.getByTestId('profile-name-input').fill(PROFILE_NAME)
   await page.getByTestId('profile-save').click()
 
@@ -181,7 +181,7 @@ test('saving the current layout as a named profile lists it as active, and the n
 })
 
 test('renaming the profile updates its row and the native menu label, keeping it active', async () => {
-  await clickLayoutMenuItem('Layout Manager…')
+  await clickLayoutMenuItem('Main Window Layout…')
   await page.getByTestId('profile-rename-0').click()
   await page.getByTestId('profile-rename-input-0').fill(PROFILE_RENAMED)
   await page.getByTestId('profile-rename-save-0').click()
@@ -221,7 +221,7 @@ test('perturbing via the Move-panel modal clears the active-profile match; re-ap
   expect(perturbedFr24Box.y).toBeCloseTo(weatherBoxAfterApply.y, 0)
   expect(perturbedFr24Box.x).toBeCloseTo(weatherBoxAfterApply.x, 0)
 
-  await clickLayoutMenuItem('Layout Manager…')
+  await clickLayoutMenuItem('Main Window Layout…')
   // The canvas no longer matches the saved profile exactly (a structural
   // edit clears `activeProfileName` — docs/Panel-System-Plan.md § Store slice).
   await expect(page.getByTestId('profile-row-0')).not.toHaveAttribute('data-active', 'true')
@@ -256,7 +256,7 @@ test('perturbing via the Move-panel modal clears the active-profile match; re-ap
 })
 
 test('deleting the profile removes its row and its native-menu radio item', async () => {
-  await clickLayoutMenuItem('Layout Manager…')
+  await clickLayoutMenuItem('Main Window Layout…')
   await page.getByTestId('profile-delete-0').click()
   await expect(page.getByTestId('profile-row-0')).toHaveCount(0)
   await expect(page.getByTestId('profile-list')).toHaveCount(0)
