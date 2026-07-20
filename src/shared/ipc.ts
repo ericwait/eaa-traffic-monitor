@@ -58,7 +58,13 @@ export const IpcChannels = {
   /** renderer(popout) -> main: persist this pop-out's layout / per-feed volumes (Phase 4). */
   windowsPatchPopout: 'windows:patchPopout',
   /** main -> renderer: the set of currently open pop-outs, for feed hand-off (Phase 4). */
-  windowsPopoutsChanged: 'windows:popoutsChanged'
+  windowsPopoutsChanged: 'windows:popoutsChanged',
+  /**
+   * renderer(popout) -> main (invoke): merge this pop-out's feeds into another
+   * open pop-out's window, then close this one — the "Merge into…" control
+   * (decision 2026-07-20; see docs/design/Video.md § Pop-outs and restore).
+   */
+  windowsMergePopout: 'windows:mergePopout'
 } as const
 
 // ---------------------------------------------------------------------------
@@ -317,8 +323,17 @@ export interface WindowsApi {
   /** (pop-out window) Persist this pop-out's layout / per-feed volumes. */
   patchPopout(id: number, patch: PopoutPatch): void
   /**
-   * Subscribe to the set of currently open pop-outs (feed hand-off). Returns an
-   * unsubscribe function; call it on teardown so a re-mount never stacks listeners.
+   * (pop-out window) "Merge into…": move `sourceId`'s feeds + per-feed volumes
+   * into `targetId`'s pop-out, then close `sourceId`'s window. Resolves `true`
+   * on success; `false` if either id is unknown, they're equal, or a window
+   * disappeared in a race with a manual close — the caller shows an inline
+   * error rather than assuming the merge happened.
+   */
+  mergePopout(sourceId: number, targetId: number): Promise<boolean>
+  /**
+   * Subscribe to the set of currently open pop-outs (feed hand-off, and the
+   * "Merge into…" control's target list). Returns an unsubscribe function;
+   * call it on teardown so a re-mount never stacks listeners.
    */
   onPopoutsChanged(listener: (popouts: PopoutSummary[]) => void): () => void
   /** This window's renderer role, derived once from the launch URL query. */

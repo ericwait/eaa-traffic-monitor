@@ -6,6 +6,7 @@ import {
   upsertPopout,
   removePopout,
   patchPopout,
+  mergePopouts,
   nextPopoutId,
   poppedOutFeedIds,
   popoutSummaries
@@ -300,5 +301,69 @@ describe('pop-out operations', () => {
       { id: 2, feedIds: ['vintage', 'ultralights'] }
     ])
     expect(summaries[0].feedIds).not.toBe(withTwo.popouts[0].feedIds)
+  })
+})
+
+// The "Merge into…" control's math (decision 2026-07-20): moving one pop-out's
+// feeds + volumes into another and dropping the source, exercised pure so it
+// is testable without a BrowserWindow (see src/main/popouts.ts's mergePopout).
+describe('mergePopouts', () => {
+  const withTwo: SessionState = (() => {
+    let s = defaultSessionState()
+    s = upsertPopout(s, popout(1, ['warbirds']))
+    s = upsertPopout(s, popout(2, ['vintage', 'ultralights']))
+    return s
+  })()
+
+  it('moves the source feeds + per-feed volumes into the target and drops the source', () => {
+    let state = withTwo
+    state = patchPopout(state, 1, { volumes: { warbirds: { volume: 40, muted: true } } })
+    state = patchPopout(state, 2, { volumes: { vintage: { volume: 60, muted: false } } })
+
+    const merged = mergePopouts(state, 1, 2)
+    expect(merged).not.toBeNull()
+    expect(merged!.popouts.map((p) => p.id)).toEqual([2])
+
+    const target = merged!.popouts[0]
+    expect(target.feedIds).toEqual(['vintage', 'ultralights', 'warbirds'])
+    expect(target.volumes).toEqual({
+      vintage: { volume: 60, muted: false },
+      warbirds: { volume: 40, muted: true }
+    })
+  })
+
+  it('dedupes feed ids defensively if a feed somehow appears in both slices', () => {
+    let state = defaultSessionState()
+    state = upsertPopout(state, popout(1, ['warbirds']))
+    state = upsertPopout(state, popout(2, ['warbirds', 'vintage']))
+
+    const merged = mergePopouts(state, 1, 2)
+    expect(merged!.popouts[0].feedIds).toEqual(['warbirds', 'vintage'])
+  })
+
+  it('leaves the target bounds/video layout untouched — only the feed set grows', () => {
+    let state = withTwo
+    state = patchPopout(state, 2, {
+      video: { mode: 'emphasized', emphasizedFeedId: 'vintage', fillPanelFeedId: null }
+    })
+    const merged = mergePopouts(state, 1, 2)
+    expect(merged!.popouts[0].video).toEqual({
+      mode: 'emphasized',
+      emphasizedFeedId: 'vintage',
+      fillPanelFeedId: null
+    })
+    expect(merged!.popouts[0].bounds).toEqual(bounds())
+  })
+
+  it('returns null (no-op) for equal ids or an unknown id', () => {
+    expect(mergePopouts(withTwo, 1, 1)).toBeNull()
+    expect(mergePopouts(withTwo, 1, 99)).toBeNull()
+    expect(mergePopouts(withTwo, 99, 1)).toBeNull()
+  })
+
+  it('does not mutate the input state', () => {
+    const before = structuredClone(withTwo)
+    mergePopouts(withTwo, 1, 2)
+    expect(withTwo).toEqual(before)
   })
 })
