@@ -33,6 +33,8 @@ export const IpcChannels = {
   sessionGet: 'session:get',
   /** renderer -> main: shallow-merge a patch into the persisted session state. */
   sessionPatch: 'session:patch',
+  /** renderer -> main (invoke): set the app theme (System/Cream/Ember); drives nativeTheme.themeSource. */
+  themeSet: 'theme:set',
   /** renderer -> main (invoke): read + validate config.json (Phase 2a). */
   configGet: 'config:get',
   /** renderer -> main (invoke): re-read config.json from disk (Phase 2a). */
@@ -100,6 +102,16 @@ export interface Fr24NavState {
 // via the `windows:*` channels, so they are deliberately absent from the patch
 // surface. Keep both shapes in lockstep with the pure merge in `shared/session`.
 // ---------------------------------------------------------------------------
+
+/**
+ * The app's theme selection (Wyvern Watch reskin, decision 2026-07-19):
+ * 'system' follows the OS via `nativeTheme.themeSource`; 'light'/'dark' force
+ * Cream Classic / Ember regardless of the OS setting. Set through `theme:set`
+ * in the main process (never per-renderer CSS), so every window — including
+ * pop-outs — and the OS chrome follow a single change instantly. Persisted in
+ * `SessionState.theme`; default 'system'.
+ */
+export type ThemeMode = 'system' | 'light' | 'dark'
 
 /**
  * A remembered output-device choice for one ATC stream. Both fields are stored:
@@ -204,6 +216,8 @@ export interface SessionState {
   panelLayout: PanelLayoutSession | null
   /** Every open pop-out window (empty when none). */
   popouts: PopoutState[]
+  /** The app theme selection (System/Cream/Ember); default 'system'. */
+  theme: ThemeMode
 }
 
 /**
@@ -233,6 +247,8 @@ export interface SessionPatch {
   video?: VideoLayoutState
   /** Replace the whole panel-layout section (whole-section replace, like `window`); `null` clears it. */
   panelLayout?: PanelLayoutSession | null
+  /** Replace the app theme selection. Applied main-side via `theme:set`, not sent by the renderer through `session:patch` directly, but kept in the patch shape so the pure merge handles it uniformly. */
+  theme?: ThemeMode
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +307,16 @@ export interface SessionApi {
   patch(patch: SessionPatch): void
 }
 
+export interface ThemeApi {
+  /**
+   * Set the app theme (System/Cream/Ember). Drives `nativeTheme.themeSource`
+   * in the main process — every window (including pop-outs) and the OS chrome
+   * follow instantly — and persists the choice for the next launch. The
+   * current value is read via `session.get()`; there is no separate getter.
+   */
+  set(theme: ThemeMode): Promise<void>
+}
+
 export interface WindowsApi {
   /** (main window) Pop a subset of feeds into their own grid-only window; resolves the new id. */
   openPopout(request: OpenPopoutRequest): Promise<number>
@@ -313,6 +339,7 @@ export interface WindowsApi {
 export interface AppApi {
   fr24: Fr24Api
   session: SessionApi
+  theme: ThemeApi
   config: ConfigApi
   audio: AudioApi
   liveatc: LiveAtcApi

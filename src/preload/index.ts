@@ -13,6 +13,7 @@ import type {
   ResolveStreamResult,
   SessionPatch,
   SessionState,
+  ThemeMode,
   UpdateStreamsResult,
   WeatherResult,
   WindowRole
@@ -69,6 +70,9 @@ const api: AppApi = {
     patch: (patch: SessionPatch): void => {
       ipcRenderer.send(IpcChannels.sessionPatch, patch)
     }
+  },
+  theme: {
+    set: (theme: ThemeMode): Promise<void> => ipcRenderer.invoke(IpcChannels.themeSet, theme)
   },
   config: {
     get: (): Promise<ConfigResult> => ipcRenderer.invoke(IpcChannels.configGet),

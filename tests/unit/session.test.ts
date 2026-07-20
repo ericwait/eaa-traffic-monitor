@@ -48,7 +48,8 @@ describe('defaultSessionState', () => {
       layout: {},
       video: { mode: 'uniform', emphasizedFeedId: null, fillPanelFeedId: null },
       panelLayout: null,
-      popouts: []
+      popouts: [],
+      theme: 'system'
     })
     expect(a).not.toBe(b)
     expect(a.audio).not.toBe(b.audio)
@@ -168,6 +169,14 @@ describe('sanitizeSessionState', () => {
     expect(s.panelLayout).toBeNull()
     expect(s.fr24.lastUrl).toBe('https://x')
   })
+
+  it('keeps a valid theme and defaults an absent/invalid one to system', () => {
+    expect(sanitizeSessionState({ theme: 'light' }).theme).toBe('light')
+    expect(sanitizeSessionState({ theme: 'dark' }).theme).toBe('dark')
+    expect(sanitizeSessionState({}).theme).toBe('system')
+    expect(sanitizeSessionState({ theme: 'ember' }).theme).toBe('system')
+    expect(sanitizeSessionState({ theme: 42 }).theme).toBe('system')
+  })
 })
 
 describe('applySessionPatch', () => {
@@ -256,6 +265,15 @@ describe('applySessionPatch', () => {
     expect(state.panelLayout).toEqual(section)
     state = applySessionPatch(state, { panelLayout: null })
     expect(state.panelLayout).toBeNull()
+  })
+
+  it('replaces the theme and is a no-op when the patch omits it', () => {
+    let state = applySessionPatch(defaultSessionState(), { theme: 'dark' })
+    expect(state.theme).toBe('dark')
+    state = applySessionPatch(state, { fr24: { lastUrl: 'https://x' } })
+    expect(state.theme).toBe('dark')
+    state = applySessionPatch(state, { theme: 'light' })
+    expect(state.theme).toBe('light')
   })
 })
 

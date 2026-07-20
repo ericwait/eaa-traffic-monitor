@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol } from 'electron'
+import { app, BrowserWindow, nativeTheme, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 // Runtime window icon (Windows/Linux). electron-vite copies this PNG into out/
@@ -190,6 +190,13 @@ app
     // Set the AppUserModelId on Windows so notifications and taskbar grouping
     // attribute to this app rather than the generic Electron identity.
     electronApp.setAppUserModelId('com.ericwait.airshow-traffic-monitor')
+
+    // Apply the persisted theme (System/Cream/Ember) BEFORE any window is
+    // created, so the very first paint already matches — nativeTheme.themeSource
+    // drives prefers-color-scheme in every renderer at once, so pop-outs and OS
+    // window chrome follow with zero per-window sync code (decision 2026-07-19;
+    // see docs/decisions/README.md and docs/WYVERN-RESKIN-PLAN.md Step 3).
+    nativeTheme.themeSource = getSessionState().theme
 
     // Wire the app:// scheme to the packaged renderer files whenever we are not
     // pointed at the dev server (same discriminator as the load path above).
