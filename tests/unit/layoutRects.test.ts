@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest'
 import {
   buildDefaultTree,
   clampSizesToMinPx,
+  clampTreeToMinPx,
   computeLayoutRects,
+  type LayoutNode,
   type LeafRectResult,
+  type PanelId,
   type Rect,
   type SplitterRectResult
 } from '@shared/panelLayout'
@@ -204,5 +207,170 @@ describe('clampSizesToMinPx', () => {
 
   it('handles an empty sizes array', () => {
     expect(clampSizesToMinPx([], 1000, 100)).toEqual([])
+  })
+})
+
+// The render-time min-size floor (decision 2026-07-20). The load-bearing
+// property throughout: after clamping, no leaf renders below its usable
+// minimum px — the safety net that keeps a panel from ever collapsing into an
+// ungrabbable sliver. Mirrors PanelCanvas's own LEAF_MIN_PX floors.
+describe('clampTreeToMinPx', () => {
+  const SPLITTER_PX = 6
+  const FLOOR: Record<'audio' | 'weather' | 'fr24' | 'video', number> = {
+    audio: 200,
+    fr24: 200,
+    weather: 160,
+    video: 120
+  }
+  const minPxForLeaf = (id: PanelId): number => {
+    if (id === 'audio') return FLOOR.audio
+    if (id === 'weather') return FLOOR.weather
+    if (id === 'fr24') return FLOOR.fr24
+    return FLOOR.video
+  }
+
+  /** The main-axis span each leaf actually renders at, once the clamped tree is mapped onto `container`. */
+  function renderedLeafWidths(tree: LayoutNode, container: Rect): Map<PanelId, Rect> {
+    const clamped = clampTreeToMinPx(tree, container, minPxForLeaf, SPLITTER_PX)
+    const { leaves } = computeLayoutRects(clamped, container, SPLITTER_PX)
+    return new Map(leaves.map((l) => [l.id, l.rect]))
+  }
+
+  it('returns the same reference when every leaf already clears its floor', () => {
+    const tree: LayoutNode = {
+      type: 'split',
+      id: 'root',
+      orientation: 'horizontal',
+      children: [
+        { type: 'leaf', id: 'audio' },
+        { type: 'leaf', id: 'fr24' }
+      ],
+      sizes: [50, 50]
+    }
+    const container: Rect = { x: 0, y: 0, width: 2000, height: 800 }
+    expect(clampTreeToMinPx(tree, container, minPxForLeaf, SPLITTER_PX)).toBe(tree)
+  })
+
+  it('raises a collapsed child back up to its px floor (the "shrunk to a sliver" case)', () => {
+    const tree: LayoutNode = {
+      type: 'split',
+      id: 'root',
+      orientation: 'horizontal',
+      children: [
+        { type: 'leaf', id: 'video:a' },
+        { type: 'leaf', id: 'fr24' }
+      ],
+      sizes: [98, 2] // fr24 at 2% of ~2000px = ~40px, well under its 200px floor
+    }
+    const container: Rect = { x: 0, y: 0, width: 2000, height: 800 }
+    const rects = renderedLeafWidths(tree, container)
+    // fr24 is lifted to (essentially) its floor; a couple of px of rounding slack.
+    expect(rects.get('fr24')!.width).toBeGreaterThanOrEqual(FLOOR.fr24 - 2)
+    // video:a keeps the rest and stays comfortably above its own 120px floor.
+    expect(rects.get('video:a')!.width).toBeGreaterThanOrEqual(FLOOR.video)
+    const total = rects.get('fr24')!.width + rects.get('video:a')!.width
+    expect(total).toBeLessThanOrEqual(container.width) // splitter gap accounts for the rest
+  })
+
+  it('holds a nested column to its widest leaf floor, not a flat leaf floor', () => {
+    // A near-collapsed audio/weather column: measured across its own vertical
+    // orientation, its width floor is max(audio 200, weather 160) = 200 — NOT
+    // the 120 a bare video leaf would get.
+    const tree: LayoutNode = {
+      type: 'split',
+      id: 'root',
+      orientation: 'horizontal',
+      children: [
+        { type: 'leaf', id: 'video:a' },
+        {
+          type: 'split',
+          id: 'col',
+          orientation: 'vertical',
+          children: [
+            { type: 'leaf', id: 'audio' },
+            { type: 'leaf', id: 'weather' }
+          ],
+          sizes: [50, 50]
+        }
+      ],
+      sizes: [98, 2]
+    }
+    const container: Rect = { x: 0, y: 0, width: 2000, height: 800 }
+    const rects = renderedLeafWidths(tree, container)
+    // Both column leaves share the column's width, so each must be >= 200px wide.
+    expect(rects.get('audio')!.width).toBeGreaterThanOrEqual(FLOOR.audio - 2)
+    expect(rects.get('weather')!.width).toBeGreaterThanOrEqual(FLOOR.audio - 2)
+  })
+
+  it('enforces floors top-down: a deeply squeezed nested split still clears every leaf', () => {
+    const tree: LayoutNode = {
+      type: 'split',
+      id: 'root',
+      orientation: 'horizontal',
+      children: [
+        { type: 'leaf', id: 'video:big' },
+        {
+          type: 'split',
+          id: 'col',
+          orientation: 'vertical',
+          children: [
+            { type: 'leaf', id: 'audio' },
+            { type: 'leaf', id: 'weather' }
+          ],
+          sizes: [95, 5] // weather collapsed within the column too
+        }
+      ],
+      sizes: [95, 5] // whole column collapsed at the root
+    }
+    const container: Rect = { x: 0, y: 0, width: 2000, height: 900 }
+    const rects = renderedLeafWidths(tree, container)
+    expect(rects.get('audio')!.width).toBeGreaterThanOrEqual(FLOOR.audio - 2)
+    expect(rects.get('audio')!.height).toBeGreaterThanOrEqual(FLOOR.audio - 2)
+    expect(rects.get('weather')!.height).toBeGreaterThanOrEqual(FLOOR.weather - 2)
+  })
+
+  it('best-effort (proportional to need) when the floors cannot all fit, never throwing', () => {
+    // Three 200px-floor panels in a 400px-wide container — 600px of floor can't
+    // fit. Must degrade gracefully to shares proportional to need, summing 100.
+    const tree: LayoutNode = {
+      type: 'split',
+      id: 'root',
+      orientation: 'horizontal',
+      children: [
+        { type: 'leaf', id: 'audio' },
+        { type: 'leaf', id: 'fr24' },
+        { type: 'leaf', id: 'weather' }
+      ],
+      sizes: [80, 10, 10]
+    }
+    const container: Rect = { x: 0, y: 0, width: 400, height: 800 }
+    const clamped = clampTreeToMinPx(tree, container, minPxForLeaf, SPLITTER_PX)
+    expect(clamped.type).toBe('split')
+    if (clamped.type === 'split') {
+      const sum = clamped.sizes.reduce((a, b) => a + b, 0)
+      expect(sum).toBeCloseTo(100, 3)
+      for (const s of clamped.sizes) expect(s).toBeGreaterThan(0)
+    }
+  })
+
+  it('is a no-op (same reference) at a zero-sized container — nothing to clamp against', () => {
+    const tree: LayoutNode = {
+      type: 'split',
+      id: 'root',
+      orientation: 'horizontal',
+      children: [
+        { type: 'leaf', id: 'audio' },
+        { type: 'leaf', id: 'fr24' }
+      ],
+      sizes: [50, 50]
+    }
+    const zero: Rect = { x: 0, y: 0, width: 0, height: 0 }
+    expect(clampTreeToMinPx(tree, zero, minPxForLeaf, SPLITTER_PX)).toBe(tree)
+  })
+
+  it('leaves a bare leaf tree untouched', () => {
+    const tree: LayoutNode = { type: 'leaf', id: 'fr24' }
+    const container: Rect = { x: 0, y: 0, width: 100, height: 100 }
+    expect(clampTreeToMinPx(tree, container, minPxForLeaf, SPLITTER_PX)).toBe(tree)
   })
 })

@@ -871,6 +871,138 @@ export function clampSizesToMinPx(
   return normalizeSizes(result)
 }
 
+/**
+ * Like `clampSizesToMinPx` but with a PER-CHILD floor (`floorsPx[i]` is child
+ * i's own minimum px), for splits whose children have different minimums (an
+ * `audio` panel beside a `video` panel, or beside a nested split that needs
+ * more room than any single leaf). Raises every undersized child to its own
+ * floor, taking the deficit proportionally from the children that still have
+ * slack; iterates so a child pushed below its floor by an earlier
+ * redistribution is caught on the next pass. When the floors cannot all fit in
+ * `totalPx`, best-effort splits proportional to each child's NEED (so the
+ * hungriest panel still gets the most room) rather than collapsing one to a
+ * sliver.
+ */
+function clampSizesToFloorsPx(
+  sizes: readonly number[],
+  totalPx: number,
+  floorsPx: readonly number[]
+): number[] {
+  const n = sizes.length
+  if (n === 0) return []
+  if (totalPx <= 0) return normalizeSizes(sizes) // no px to clamp against — leave shares as-is
+
+  const minPct = floorsPx.map((px) => (Math.max(0, px) / totalPx) * 100)
+  const sumMin = minPct.reduce((a, b) => a + b, 0)
+  if (sumMin >= 100) return normalizeSizes(minPct) // floors don't all fit — split proportional to need
+
+  const result = normalizeSizes(sizes)
+  for (let iter = 0; iter < n; iter++) {
+    let deficit = 0
+    const locked = new Array<boolean>(n).fill(false)
+    for (let i = 0; i < n; i++) {
+      if (result[i] < minPct[i]) {
+        deficit += minPct[i] - result[i]
+        result[i] = minPct[i]
+        locked[i] = true
+      }
+    }
+    if (deficit <= SIZE_EPSILON) break
+    const freeIndices = result.map((_, i) => i).filter((i) => !locked[i])
+    const freeTotal = freeIndices.reduce((sum, i) => sum + result[i], 0)
+    if (freeTotal <= 0) break
+    for (const i of freeIndices) {
+      result[i] -= (deficit * result[i]) / freeTotal
+    }
+  }
+  return normalizeSizes(result)
+}
+
+/**
+ * The minimum main-axis px a whole subtree needs so EVERY leaf under it clears
+ * its own floor: a leaf's own `minPxForLeaf`; a split measured ALONG its own
+ * orientation sums its children's needs (plus the splitter gaps between them);
+ * a split measured ACROSS its orientation takes the largest child need (they
+ * all share that extent). `axis` is the axis being measured ('x' = width,
+ * 'y' = height).
+ */
+function requiredMinPx(
+  node: LayoutNode,
+  axis: 'x' | 'y',
+  splitterPx: number,
+  minPxForLeaf: (id: PanelId) => number
+): number {
+  if (node.type === 'leaf') return minPxForLeaf(node.id)
+  const along: 'x' | 'y' = node.orientation === 'horizontal' ? 'x' : 'y'
+  const childMins = node.children.map((c) => requiredMinPx(c, axis, splitterPx, minPxForLeaf))
+  if (childMins.length === 0) return 0
+  if (axis === along) {
+    const gaps = splitterPx * Math.max(0, node.children.length - 1)
+    return childMins.reduce((a, b) => a + b, 0) + gaps
+  }
+  return Math.max(...childMins)
+}
+
+/**
+ * (decision 2026-07-20) Rewrite every split's `sizes` so that, mapped onto
+ * `containerRect`, NO leaf renders below its usable minimum px — the
+ * render-time safety net that keeps a panel from ever collapsing into an
+ * ungrabbable sliver. `computeLayoutRects` itself stays pure percentage->pixel
+ * math (its exact-tiling guarantee is unchanged); this pass runs FIRST, in
+ * PanelCanvas, feeding `computeLayoutRects` a floor-satisfying tree. It fixes
+ * the whole class of "stuck panel" bugs at once — a shrunk window, or
+ * compounding percentages from repeated docks/moves — because the floor is
+ * enforced against the CURRENT pixel span every render, not just during a live
+ * splitter drag (the only place the floor was previously applied, per
+ * Splitter.tsx / `clampSizesToMinPx`). Walks top-down so each nested split is
+ * clamped against the px its (already-clamped) parent actually gives it; the
+ * per-child floor is the recursive `requiredMinPx`, so a split child is held to
+ * what its own subtree needs, not a flat leaf floor. Returns the same reference
+ * when nothing needed clamping. See docs/decisions/README.md and
+ * docs/Panel-System-Plan.md § Key interactions § Splitter drag.
+ */
+export function clampTreeToMinPx(
+  tree: LayoutNode,
+  containerRect: Rect,
+  minPxForLeaf: (id: PanelId) => number,
+  splitterPx: number = DEFAULT_SPLITTER_PX
+): LayoutNode {
+  function walk(node: LayoutNode, rect: Rect): LayoutNode {
+    if (node.type === 'leaf') return node
+
+    const horizontal = node.orientation === 'horizontal'
+    const axis: 'x' | 'y' = horizontal ? 'x' : 'y'
+    const n = node.children.length
+    const mainAxisSize = horizontal ? rect.width : rect.height
+    const gapTotal = splitterPx * Math.max(0, n - 1)
+    const available = Math.max(0, mainAxisSize - gapTotal)
+    const floorsPx = node.children.map((c) => requiredMinPx(c, axis, splitterPx, minPxForLeaf))
+    const clampedSizes = clampSizesToFloorsPx(node.sizes, available, floorsPx)
+
+    // Allocate each child its main-axis span from the CLAMPED sizes, so a
+    // nested split is measured against the room it will actually get (float
+    // spans — the <=1px vs computeLayoutRects' cumulative rounding never
+    // changes a min-floor decision).
+    const totalPct = clampedSizes.reduce((a, b) => a + b, 0) || 1
+    let cursor = horizontal ? rect.x : rect.y
+    const children = node.children.map((child, i) => {
+      const childMain = (clampedSizes[i] / totalPct) * available
+      const childRect: Rect = horizontal
+        ? { x: cursor, y: rect.y, width: childMain, height: rect.height }
+        : { x: rect.x, y: cursor, width: rect.width, height: childMain }
+      cursor += childMain + splitterPx
+      return walk(child, childRect)
+    })
+
+    const sizesChanged = !sizesRoughlyEqual(clampedSizes, node.sizes)
+    const childrenChanged = children.some((c, i) => c !== node.children[i])
+    if (!sizesChanged && !childrenChanged) return node
+    return { ...node, children, sizes: sizesChanged ? clampedSizes : node.sizes }
+  }
+
+  return walk(tree, containerRect)
+}
+
 // ---------------------------------------------------------------------------
 // Never-throw sanitizers. A missing field, a hand-edited value of the wrong
 // type, or a whole non-object degrades to null/a default rather than throwing
