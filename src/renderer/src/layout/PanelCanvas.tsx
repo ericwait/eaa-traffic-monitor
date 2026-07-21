@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  clampTreeToMinPx,
   collectLeafIds,
   computeLayoutRects,
   type LayoutNode,
@@ -32,8 +33,13 @@ const LEAF_MIN_PX: Record<ReturnType<typeof panelKind>, number> = {
   video: 120
 }
 
+/** One leaf's usable-minimum px floor, by panel kind. Also the per-leaf floor `clampTreeToMinPx` walks up recursively (see its `requiredMinPx`). */
+function minPxForLeaf(id: PanelId): number {
+  return LEAF_MIN_PX[panelKind(id)]
+}
+
 function minPxForNode(node: LayoutNode): number {
-  return node.type === 'leaf' ? LEAF_MIN_PX[panelKind(node.id)] : LEAF_MIN_PX.video
+  return node.type === 'leaf' ? minPxForLeaf(node.id) : LEAF_MIN_PX.video
 }
 
 /**
@@ -161,15 +167,28 @@ function PanelCanvas({ renderLeafBody }: PanelCanvasProps): React.JSX.Element {
     [size.width, size.height]
   )
 
-  const { leaves, splitters } = useMemo(
-    () => computeLayoutRects(effectiveTree, containerRect, SPLITTER_PX),
+  // Render-time min-size floor (decision 2026-07-20): rewrite each split's
+  // sizes so no leaf falls below its usable minimum px for the CURRENT
+  // container size — the safety net that stops a panel from ever collapsing
+  // into an ungrabbable sliver (a shrunk window, or compounding percentages
+  // from repeated docks/moves). Everything downstream — leaf/splitter rects,
+  // splitMeta, the drag hit-test leaves — is derived from this clamped tree, so
+  // what the operator sees and can grab always honors the floor. See
+  // clampTreeToMinPx in @shared/panelLayout.
+  const clampedTree = useMemo(
+    () => clampTreeToMinPx(effectiveTree, containerRect, minPxForLeaf, SPLITTER_PX),
     [effectiveTree, containerRect]
+  )
+
+  const { leaves, splitters } = useMemo(
+    () => computeLayoutRects(clampedTree, containerRect, SPLITTER_PX),
+    [clampedTree, containerRect]
   )
 
   const leafRectById = useMemo(() => new Map(leaves.map((l) => [l.id, l.rect])), [leaves])
   const splitMeta = useMemo(
-    () => collectSplitMeta(effectiveTree, leafRectById, SPLITTER_PX),
-    [effectiveTree, leafRectById]
+    () => collectSplitMeta(clampedTree, leafRectById, SPLITTER_PX),
+    [clampedTree, leafRectById]
   )
 
   // Header drag-to-dock (docs/Panel-System-Plan.md § Key interactions § Header
