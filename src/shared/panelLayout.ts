@@ -356,10 +356,21 @@ export function pruneVideoLeaves(
 }
 
 /**
- * Split the leaf `targetId` into a new 2-child split containing it plus
- * `newLeaf`, positioned on `edge` with `newLeaf` taking `sharePct` (clamped
- * into [1, 99]; default 50). A `targetId` absent from the tree is a no-op
- * (returns the same reference) rather than a throw.
+ * Dock `newLeaf` beside the leaf `targetId` on `edge`, with `newLeaf` taking
+ * `sharePct` of the space `targetId` currently occupies (clamped into [1, 99];
+ * default 50). A `targetId` absent from the tree is a no-op (returns the same
+ * reference) rather than a throw.
+ *
+ * When `targetId`'s parent split ALREADY runs along the dock axis, `newLeaf` is
+ * inserted as a SIBLING in that parent rather than wrapped with the target in a
+ * new same-orientation split (decision 2026-07-23): docking a panel left/right
+ * of a member of a horizontal row joins the row (and the vertical mirror). A
+ * split nested inside a same-orientation split is redundant — it paints a
+ * second, real, draggable divider mid-panel with no layout meaning, the
+ * "phantom divider" that compounds over repeated docks/moves (see
+ * docs/decisions/README.md). Only a cross-axis dock — or splitting the whole
+ * tree when it is a bare leaf — creates a new 2-child split, which is a
+ * legitimate (opposite-orientation) nesting.
  */
 export function splitPanel(
   tree: LayoutNode,
@@ -372,16 +383,37 @@ export function splitPanel(
     99,
     Math.max(1, Number.isFinite(sharePct) ? sharePct : PANEL_SPLIT_SHARE_PCT)
   )
-  const splitId = nextSplitId(tree)
   const orientation: Orientation = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
   const newFirst = edge === 'left' || edge === 'top'
 
+  function wrap(target: LayoutNode): LayoutSplit {
+    const children = newFirst ? [newLeaf, target] : [target, newLeaf]
+    const sizes = newFirst ? [share, 100 - share] : [100 - share, share]
+    return { type: 'split', id: nextSplitId(tree), orientation, children, sizes }
+  }
+
   function replace(node: LayoutNode): LayoutNode {
     if (node.type === 'leaf') {
-      if (node.id !== targetId) return node
-      const children = newFirst ? [newLeaf, node] : [node, newLeaf]
-      const sizes = newFirst ? [share, 100 - share] : [100 - share, share]
-      return { type: 'split', id: splitId, orientation, children, sizes }
+      // Reached only when the whole tree IS the bare target leaf — there is no
+      // parent to join, so wrap it in a fresh split.
+      return node.id === targetId ? wrap(node) : node
+    }
+    const targetIndex = node.children.findIndex(
+      (child) => child.type === 'leaf' && child.id === targetId
+    )
+    if (targetIndex >= 0 && node.orientation === orientation) {
+      // Same-axis parent: hand `newLeaf` its share out of the target's own
+      // slot and splice it in immediately before/after the target. No new
+      // node, no nesting — the split's other children are untouched.
+      const targetShare = node.sizes[targetIndex] ?? 0
+      const newLeafShare = (targetShare * share) / 100
+      const insertAt = newFirst ? targetIndex : targetIndex + 1
+      const children = node.children.slice()
+      children.splice(insertAt, 0, newLeaf)
+      const sizes = node.sizes.slice()
+      sizes[targetIndex] = targetShare - newLeafShare
+      sizes.splice(insertAt, 0, newLeafShare)
+      return { ...node, children, sizes: normalizeSizes(sizes) }
     }
     let changed = false
     const children = node.children.map((child) => {
@@ -437,11 +469,27 @@ export function movePanel(tree: LayoutNode, id: PanelId, target: DropTarget): La
   // Root dock: id becomes a new outer sibling of everything else.
   const removed = removePanel(tree, id)
   if (removed === null) return tree
-  const splitId = nextSplitId(tree)
   const orientation: Orientation =
     target.edge === 'left' || target.edge === 'right' ? 'horizontal' : 'vertical'
   const newFirst = target.edge === 'left' || target.edge === 'top'
   const newLeaf: LayoutLeaf = { type: 'leaf', id }
+
+  if (removed.type === 'split' && removed.orientation === orientation) {
+    // The outer tree already runs along the dock axis — join it as a new
+    // first/last child rather than nesting a same-orientation split around it
+    // (decision 2026-07-23; same rule as splitPanel). `id` still becomes an
+    // outer sibling of everything else at ROOT_DOCK_SHARE_PCT; the existing
+    // children shrink proportionally to share the remainder.
+    const scale = (100 - ROOT_DOCK_SHARE_PCT) / 100
+    const scaledSizes = removed.sizes.map((s) => s * scale)
+    const children = newFirst ? [newLeaf, ...removed.children] : [...removed.children, newLeaf]
+    const sizes = newFirst
+      ? [ROOT_DOCK_SHARE_PCT, ...scaledSizes]
+      : [...scaledSizes, ROOT_DOCK_SHARE_PCT]
+    return { ...removed, children, sizes: normalizeSizes(sizes) }
+  }
+
+  const splitId = nextSplitId(tree)
   const children = newFirst ? [newLeaf, removed] : [removed, newLeaf]
   const sizes = newFirst
     ? [ROOT_DOCK_SHARE_PCT, 100 - ROOT_DOCK_SHARE_PCT]
