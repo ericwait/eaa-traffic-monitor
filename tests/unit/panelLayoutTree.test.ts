@@ -120,6 +120,16 @@ describe('normalizeTree', () => {
   })
 })
 
+/** True if any split anywhere in `node` has a direct child split of the SAME orientation — the "phantom divider" nesting a same-orientation dock must never create (decision 2026-07-23). */
+function hasSameOrientationNesting(node: LayoutNode): boolean {
+  if (node.type === 'leaf') return false
+  return node.children.some(
+    (child) =>
+      (child.type === 'split' && child.orientation === node.orientation) ||
+      hasSameOrientationNesting(child)
+  )
+}
+
 describe('removePanel', () => {
   it('removing the last leaf yields null', () => {
     expect(removePanel(leaf('fr24'), 'fr24')).toBeNull()
@@ -213,6 +223,52 @@ describe('splitPanel', () => {
     const huge = splitPanel(leaf('fr24'), 'fr24', leaf('weather'), 'right', 500) as LayoutSplit
     expect(huge.sizes[1]).toBe(99)
   })
+
+  it('docks as a sibling (no new split) when the target parent already runs the same axis', () => {
+    // fr24 sits in a horizontal row; docking video:a to its right JOINS the
+    // row rather than wrapping fr24 in a nested horizontal split — the
+    // phantom-divider pathology (decision 2026-07-23).
+    const row = split(
+      'row',
+      'horizontal',
+      [leaf('audio'), leaf('fr24'), leaf('weather')],
+      [30, 40, 30]
+    )
+    const result = splitPanel(row, 'fr24', leaf('video:a'), 'right', 25) as LayoutSplit
+    expect(result.id).toBe('row') // same split, one more child — no wrapper node
+    expect(collectLeafIds(result)).toEqual(['audio', 'fr24', 'video:a', 'weather'])
+    expect(hasSameOrientationNesting(result)).toBe(false)
+    // fr24's 40% splits 75/25 → fr24 30, video:a 10; the siblings are untouched.
+    expect(result.sizes[0]).toBeCloseTo(30, 9)
+    expect(result.sizes[1]).toBeCloseTo(30, 9)
+    expect(result.sizes[2]).toBeCloseTo(10, 9)
+    expect(result.sizes[3]).toBeCloseTo(30, 9)
+  })
+
+  it('inserts the sibling BEFORE the target for a leading edge into a same-axis parent', () => {
+    const col = split('col', 'vertical', [leaf('fr24'), leaf('audio')], [60, 40])
+    const result = splitPanel(col, 'fr24', leaf('weather'), 'top', 50) as LayoutSplit
+    expect(result.id).toBe('col')
+    expect(collectLeafIds(result)).toEqual(['weather', 'fr24', 'audio'])
+    expect(hasSameOrientationNesting(result)).toBe(false)
+    // fr24's 60% halves → weather 30 (before), fr24 30; audio keeps its 40.
+    expect(result.sizes[0]).toBeCloseTo(30, 9)
+    expect(result.sizes[1]).toBeCloseTo(30, 9)
+    expect(result.sizes[2]).toBeCloseTo(40, 9)
+  })
+
+  it('still wraps (a legitimate opposite-orientation nesting) when the dock is on the cross axis', () => {
+    const row = split('row', 'horizontal', [leaf('audio'), leaf('fr24')], [50, 50])
+    // Docking BELOW fr24 inside a horizontal row is a real 2D layout, not the
+    // pathology — fr24 becomes a vertical stack, nested the OTHER way.
+    const result = splitPanel(row, 'fr24', leaf('weather'), 'bottom', 40) as LayoutSplit
+    expect(result.id).toBe('row')
+    const stacked = result.children[1] as LayoutSplit
+    expect(stacked.type).toBe('split')
+    expect(stacked.orientation).toBe('vertical')
+    expect(stacked.children).toEqual([leaf('fr24'), leaf('weather')])
+    expect(hasSameOrientationNesting(result)).toBe(false) // vertical-in-horizontal is fine
+  })
 })
 
 describe('swapPanels', () => {
@@ -294,12 +350,40 @@ describe('movePanel', () => {
     expect(leftSide).toBeDefined()
   })
 
-  it('root-edge docking wraps the tree in a new outer split at the documented 25% share', () => {
-    const tree = sampleTree()
+  it('an edge dock into a same-axis neighbor joins as a sibling — never a phantom nested divider (regression, 2026-07-23)', () => {
+    // The reported bug: repeatedly docking panels beside each other in a
+    // horizontal row wrapped each in a fresh horizontal split, stacking
+    // redundant, draggable dividers mid-panel. A dock must add a sibling to
+    // the row instead (decision 2026-07-23).
+    const row = split(
+      'row',
+      'horizontal',
+      [leaf('fr24'), leaf('audio'), leaf('weather')],
+      [34, 33, 33]
+    )
+    const result = movePanel(row, 'weather', { kind: 'panel', targetId: 'fr24', zone: 'right' })
+    expect(hasSameOrientationNesting(result)).toBe(false)
+    expect(collectLeafIds(result)).toEqual(['fr24', 'weather', 'audio'])
+  })
+
+  it('root-edge docking JOINS a same-axis outer split (no nested wrapper) at the 25% share', () => {
+    const tree = sampleTree() // root is horizontal
     const result = movePanel(tree, 'weather', { kind: 'root', edge: 'left' }) as LayoutSplit
     expect(result.orientation).toBe('horizontal')
+    expect((result.children[0] as LayoutLeaf).id).toBe('weather')
+    expect(result.children).toHaveLength(3) // an outer child, not a wrapper around the tree
+    expect(result.sizes[0]).toBeCloseTo(25, 9)
+    expect(result.sizes.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 9)
+    expect(hasSameOrientationNesting(result)).toBe(false)
+  })
+
+  it('root-edge docking on the CROSS axis still wraps the tree in a new outer split at 25%', () => {
+    const tree = sampleTree() // root is horizontal
+    const result = movePanel(tree, 'weather', { kind: 'root', edge: 'top' }) as LayoutSplit
+    expect(result.orientation).toBe('vertical') // a genuinely new outer axis
     expect(result.sizes).toEqual([25, 75])
     expect((result.children[0] as LayoutLeaf).id).toBe('weather')
+    expect(result.children[1]).toEqual(removePanel(tree, 'weather'))
   })
 
   it('root docking on the only remaining leaf is a no-op', () => {

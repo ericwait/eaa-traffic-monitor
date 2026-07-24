@@ -13,6 +13,20 @@ Versioning: SemVer, computed from git history — never hand-edited here.
 
 All notable changes to this project are documented in this file.
 
+## [0.2.1] - 2026-07-23
+
+First patch on the 0.2 alpha — a layout-stability fix found live during EAA
+AirVenture 2026.
+
+### Fixed
+
+- Docking a panel beside a neighbor already in the same row or column no longer
+  leaves a stray, draggable divider floating across a panel. The docked panel
+  now joins the existing row or column directly instead of stacking a redundant
+  split, so rearranging the layout repeatedly stays clean. To clear a layout
+  that already shows the stray divider, use Layout → Reset to Default Layout
+  once.
+
 ## [0.2.0] - 2026-07-20
 
 Second alpha for EAA AirVenture 2026 — same not-yet-promoted status as 0.1.0
